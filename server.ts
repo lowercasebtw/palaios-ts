@@ -73,7 +73,7 @@ export default class Server {
                 await kick_packet(conn, `A Minecraft Server§${this._clients.length}§10`);
             } break;
             default: {
-                console.log(`Unknown packet with id ${packet_id}/0x${packet_id.toString(16)}`);
+                console.log(`Unknown packet with id (char='${String.fromCharCode(packet_id)}', value=${packet_id}, hex=0x${packet_id.toString(16)})`);
             } break;
         }
     }    
