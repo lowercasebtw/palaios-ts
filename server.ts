@@ -1,9 +1,9 @@
 import { ByteReader, MAX_BYTES_ALLOWED } from "./byte.ts";
-import { generateHash } from "./hash.ts";
+import { generateHash } from "./util/hash.ts";
 import { handshake_packet } from "./packet.ts";
 import { PacketType, kick_packet } from "./packet.ts";
-import { Client } from "./types.ts";
-import { as_string, fetchUUID, un_spaceify } from "./util.ts";
+import { Client } from "./util/types.ts";
+import { as_string, fetchUUID, un_spaceify } from "./util/util.ts";
 
 export default class Server {
     private _clients: Client[];
