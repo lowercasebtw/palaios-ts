@@ -1,4 +1,4 @@
-import { ByteReader, MAX_BYTES_ALLOWED } from "./byte.ts";
+import { ByteReader, MAX_BYTES_ALLOWED } from "./util/byte.ts";
 import { generateHash } from "./util/hash.ts";
 import { handshake_packet } from "./packet.ts";
 import { PacketType, kick_packet } from "./packet.ts";

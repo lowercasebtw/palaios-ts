@@ -1,4 +1,4 @@
-import { ByteWriter } from "./byte.ts";
+import { ByteWriter } from "./util/byte.ts";
 import { server } from "./index.ts";
 
 export enum PacketType {
