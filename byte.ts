@@ -31,9 +31,7 @@ export class ByteWriter {
     }
 
     writeByte(value: number) {
-        this.bytes.push(value);
-        // TODO: is a temp fix?
-        this.bytes.push(0x00);
+        this.bytes.push(value, 0x00);
     }
 
     writeString(data: string) {
