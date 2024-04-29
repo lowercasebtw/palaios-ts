@@ -14,10 +14,8 @@ export const MAX_BYTES_ALLOWED = 2097151;
 
 export class ByteWriter {
     private bytes: number[];
-    private prepend_length: boolean;
-    public constructor(prepend_length: boolean) {
+    public constructor() {
         this.bytes = [];
-        this.prepend_length = prepend_length;
     }
 
     *[Symbol.iterator]() {
@@ -66,9 +64,9 @@ export class ByteWriter {
         return new Uint8Array(this.bytes);
     }
 
-    async write(conn: Deno.Conn) {
-        const writer = new ByteWriter(false);
-        if (this.prepend_length)
+    async write(conn: Deno.Conn, prepend_length = true) {
+        const writer = new ByteWriter();
+        if (prepend_length)
             writer.writeVarInt(this.bytes.length);
         writer.append(this);
         return await conn.write(writer.build());

@@ -9,18 +9,18 @@ export enum PacketType {
 }
 
 export async function handshake_packet(conn: Deno.Conn, hash: string) {
-    const writer = new ByteWriter(true);
+    const writer = new ByteWriter();
     writer.writeByte(PacketType.HANDSHAKE);
     writer.writeString(hash);
     await writer.write(conn);
 }
 
 export async function kick_packet(conn: Deno.Conn, reason: string, uuid?: string | null) {
-    const writer = new ByteWriter(false);
+    const writer = new ByteWriter();
     writer.writeByte(PacketType.KICK);
     writer.writeByte(reason.length);
     writer.writeString(reason);
     if (uuid) 
         server.removeClientWithUUID(uuid);
-    await writer.write(conn);
+    await writer.write(conn, false);
 }
