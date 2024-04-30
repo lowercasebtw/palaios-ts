@@ -65,15 +65,16 @@ export default class Server {
                 // Login Request
                 const protocol_id = reader.read(Type.INT) as number;
                 const username = reader.read(Type.STRING) as string;
-                reader.read(Type.STRING); // unused
-                reader.read(Type.INT); // unused
-                reader.read(Type.INT); // unused
-                reader.read(Type.BYTE); // unused
-                reader.read(Type.UNSIGNED_BYTE); // unused
-                reader.read(Type.UNSIGNED_BYTE); // unused
+
+                // UNUSED: reader.read(Type.STRING);
+                // UNUSED: reader.read(Type.INT);
+                // UNUSED: reader.read(Type.INT);
+                // UNUSED: reader.read(Type.BYTE);
+                // UNUSED: reader.read(Type.UNSIGNED_BYTE);
+                // UNUSED: reader.read(Type.UNSIGNED_BYTE);
 
                 if (protocol_id != ProtocolVersion.v1_2_4_to_1_2_5) {
-                    await kick_packet(client, `Outdated client ${username}! You are using ${protocol_id}`);
+                    await kick_packet(client, `You are using a outdated client, ${username}! You are using ${protocol_id}`);
                     return;
                 }
 
