@@ -1,6 +1,6 @@
+import { DimensionType, WorldType } from "../../util/types.ts";
 import { Entity } from "../entity/Entity.ts";
 import Chunk from "./Chunk.ts";
-import { DimensionType, WorldType } from "./DimensionType.ts";
 
 export default class World {
     private chunks: Chunk[];

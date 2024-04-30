@@ -1,16 +1,8 @@
 import { ByteReader, ByteUtil, Type } from "./util/byte.ts";
 import { ProtocolVersion, handshake_packet, login_packet } from "./packet.ts";
 import { PacketType, kick_packet } from "./packet.ts";
-import { Client } from "./util/types.ts";
-import { fetchUUID, un_spaceify } from "./util/util.ts";
-import { generateHash } from "./util/hash.ts";
 import World from "./game/dimension/World.ts";
-import { DimensionType, WorldType } from "./game/dimension/DimensionType.ts";
-
-type Connection = {
-    connection: Deno.Conn;
-    handler_id: number;
-}
+import { Connection, Difficulty, DimensionType, WorldType } from "./util/types.ts";
 
 export default class Server {
     private _address: string;
@@ -20,6 +12,7 @@ export default class Server {
 
     private _connection_handlers: Connection[];
 
+    private difficulty: Difficulty;
     private _overworld: World;
     private _nether: World;
     private _the_end: World;
@@ -29,7 +22,9 @@ export default class Server {
         this._port = port;
         this._listener = null;
         this._connection_handlers = [];
+
         // Could be wrong implementation
+        this.difficulty = Difficulty.PEACEFUL;
         this._overworld = new World("worlds/world", DimensionType.OVERWORLD, WorldType.DEFAULT);
         this._nether = new World("worlds/nether", DimensionType.NETHER, WorldType.DEFAULT);
         this._the_end = new World("worlds/end", DimensionType.THE_END, WorldType.DEFAULT);
@@ -86,7 +81,7 @@ export default class Server {
             } break;
             case PacketType.HANDSHAKE: {
                 // Handle Client Data
-                await handshake_packet(client, generateHash());
+                await handshake_packet(client, '-');
             } break;
             case PacketType.SERVER_LIST_PING: {
                 await kick_packet(client, `A Minecraft Server§${this._connection_handlers.length}§10`);
