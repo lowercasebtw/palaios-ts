@@ -3,6 +3,7 @@ import { handshake_packet } from "./packet.ts";
 import { PacketType, kick_packet } from "./packet.ts";
 import { Client } from "./util/types.ts";
 import { as_string, fetchUUID, un_spaceify } from "./util/util.ts";
+import { generateHash } from "./util/hash.ts";
 
 export default class Server {
     private _clients: Client[];
@@ -45,6 +46,7 @@ export default class Server {
             } break;
             case PacketType.HANDSHAKE: {
                 // Handle Client Data
+                console.log("Got Handshake Request");
 
                 let uuid;
                 // TODO: Write a better handler for this
@@ -65,10 +67,13 @@ export default class Server {
                     }
                 }
     
-                await handshake_packet(conn, '-');
+                console.log("Sending Handshake to client");
+                await handshake_packet(conn, generateHash());
                 // await kick_packet(conn, `TODO`, uuid);
             } break;
             case PacketType.SERVER_LIST_PING: {
+                console.log("Got Server List Ping Request")
+                console.log("Sending Server List Ping to client")
                 await kick_packet(conn, `A Meincroft Server§${this._clients.length}§10`);
             } break;
             default: {

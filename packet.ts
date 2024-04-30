@@ -9,18 +9,12 @@ export enum PacketType {
 }
 
 export async function handshake_packet(conn: Deno.Conn, hash: string) {
-    // const writer = new ByteWriter();
-    // // 2, 0, 1, 0, 45
-    // writer.writeByte(PacketType.HANDSHAKE);
-    // writer.writeByte(1);
-    // writer.writeString('-');
-    // console.log(writer.build());
-    // await writer.write(conn);
-    await conn.write(new Uint8Array([
-        PacketType.HANDSHAKE, 0, 
-        hash.length, 0, 
-        hash.charCodeAt(0)
-    ]));
+    // 2 0 1 0 49
+    const writer = new ByteWriter();
+    writer.write(Type.BYTE, PacketType.HANDSHAKE);
+    writer.write(Type.BYTE, hash.length);
+    writer.write(Type.STRING, hash);
+    await writer.push(conn, false);
 }
 
 export async function kick_packet(conn: Deno.Conn, reason: string, uuid?: string | null) {

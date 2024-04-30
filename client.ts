@@ -29,8 +29,8 @@ await sleep(1.2 * 1000);
 const username = "nomuea";
 
 console.log('(login req) client -> server')
-// IOException: Received string length longer than maximum allowed (97 > 16)
-
+// java.io.IOException: Received string length longer than maximum allowed (110 > 16)
+//         at lx.a(SourceFile:197)
 {
     const writer = new ByteWriter();
     writer.write(Type.BYTE,   PacketType.LOGIN);
