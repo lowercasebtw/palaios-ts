@@ -16,7 +16,7 @@ export enum PacketType {
 
 export async function login_packet(client: Deno.Conn) {
     const writter = new ByteWriter();
-
+    // TODO: Work on this, doesn't work
     writter.write(Type.SHORT, PacketType.LOGIN_REQUEST);
     writter.write(Type.INT, 1); // Entity ID
     writter.write(Type.STRING, ""); // unused
@@ -26,8 +26,6 @@ export async function login_packet(client: Deno.Conn) {
     writter.write(Type.BYTE, 0); // Difficulty
     writter.write(Type.UNSIGNED_BYTE, 0); // unused
     writter.write(Type.UNSIGNED_BYTE, 1); // Player Count
-
-    console.log(writter.build());
     await writter.push(client);
 }
 
