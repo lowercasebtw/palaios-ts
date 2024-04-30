@@ -2,12 +2,6 @@ import { APIUser } from './types.ts';
 
 // TODO: wont need probably in the future
 // @Deprecated
-export function as_bytes(bytes: string) {
-    return new Uint8Array([...bytes].map(c => c.charCodeAt(0)));
-}
-
-// TODO: wont need probably in the future
-// @Deprecated
 export function as_string(bytes: Uint8Array, null_terminated = false) {
     let string = "";
     for (let i = null_terminated ? 3 : 0; i < bytes.length; ++i)
