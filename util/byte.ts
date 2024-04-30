@@ -1,3 +1,5 @@
+// https://wiki.vg/Data_types
+
 import { un_spaceify } from "./util.ts";
 
 export class ByteUtil {

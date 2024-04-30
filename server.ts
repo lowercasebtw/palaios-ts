@@ -72,19 +72,13 @@ export default class Server {
                     return;
                 }
 
-                console.log("Got Attempted login");
                 await login_packet(client);
             } break;
             case PacketType.HANDSHAKE: {
                 // Handle Client Data
-                console.log("Got Handshake Request");
-                console.log("Sending Handshake to client");
-                await handshake_packet(client, '-');
-                // await handshake_packet(conn, generateHash());
+                await handshake_packet(client, generateHash());
             } break;
             case PacketType.SERVER_LIST_PING: {
-                console.log("Got Server List Ping Request")
-                console.log("Sending Server List Ping to client")
                 await kick_packet(client, `A Minecraft Server§${this._connection_handlers.length}§10`);
             } break;
             default: {
