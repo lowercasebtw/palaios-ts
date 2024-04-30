@@ -15,7 +15,7 @@ const sleep = (ms: number) => new Promise(res => setTimeout(res, ms));
     writer.write(Type.BYTE, PacketType.HANDSHAKE);
     writer.write(Type.BYTE, handshake_str.length);
     writer.write(Type.STRING, handshake_str);
-    await writer.push(server, false);
+    await writer.push(server);
 }
 
 console.log('(handshake) server -> client')
@@ -33,11 +33,11 @@ console.log('(login req) client -> server')
 //         at lx.a(SourceFile:197)
 {
     const writer = new ByteWriter();
-    writer.write(Type.BYTE,   PacketType.LOGIN);
-    writer.write(Type.BYTE,   29);
-    writer.write(Type.BYTE,   username.length);
+    writer.write(Type.BYTE, PacketType.LOGIN_REQUEST);
+    writer.write(Type.BYTE, 29);
+    writer.write(Type.BYTE, username.length);
     writer.write(Type.STRING, username);
-    await writer.push(server, false);
+    await writer.push(server);
 }
 
 // await sleep(3 * 1000);
