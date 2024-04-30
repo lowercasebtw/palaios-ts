@@ -45,7 +45,7 @@ export class ByteWriter {
         switch (type) {
             case Type.BYTE: {
                 this.bytes.push((value as number), 0x00); // 0x00 is WRONG
-            }; break;
+            } break;
             case Type.STRING: {
                 const length = (value as string).length;
                 const buf = new ArrayBuffer(length * 2);
@@ -54,7 +54,7 @@ export class ByteWriter {
                     bufView[i] = (value as string).charCodeAt(i);
                 const bytes = new Uint8Array(buf);
                 this.bytes.push(...bytes.slice(0, bytes.length - 1));
-            }; break;
+            } break;
             case Type.VAR_INT: 
             case Type.VAR_LONG: {
                 while (true) {
@@ -65,7 +65,7 @@ export class ByteWriter {
                     this.bytes.push(((value as number) & SEGMENT_BITS) | CONTINUE_BIT);
                     (value as number) >>>= 7;
                 }
-            };
+            }
             default: {
                 throw new Error("unknown type to write");
             } 
