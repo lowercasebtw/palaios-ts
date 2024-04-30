@@ -1,8 +1,8 @@
-import { ByteReader, MAX_BYTES_ALLOWED, Type } from "./util/byte.ts";
+import { ByteReader, ByteUtil, Type } from "./util/byte.ts";
 import { handshake_packet } from "./packet.ts";
 import { PacketType, kick_packet } from "./packet.ts";
 import { Client } from "./util/types.ts";
-import { as_string, fetchUUID, un_spaceify } from "./util/util.ts";
+import { fetchUUID, un_spaceify } from "./util/util.ts";
 import { generateHash } from "./util/hash.ts";
 
 export default class Server {
@@ -26,7 +26,7 @@ export default class Server {
         this._listener = Deno.listen({ hostname: this.address, port: this.port });
         console.log(`Listening on ${this.address == "0.0.0.0" ? "localhost" : this.address}:${this.port}`);
         for await (const conn of this._listener) {
-            const array = new Uint8Array(MAX_BYTES_ALLOWED);
+            const array = new Uint8Array(ByteUtil.MAX_BYTES_ALLOWED);
             const byte_count = await conn.read(array) as number;
             if (byte_count <= 0) {
                 console.log("Received bytes with size <= 0, discarding...");
@@ -51,7 +51,7 @@ export default class Server {
                 let uuid;
                 // TODO: Write a better handler for this
                 {
-                    const string = un_spaceify(as_string(reader.readBytes(reader.length - reader.cursor)!, true));
+                    const string = un_spaceify(ByteUtil.as_string(reader.readBytes(reader.length - reader.cursor)!, true));
                     if (string.includes(';') && string.includes(':')) {
                         // username;address:port
                         const parts = string.split(';');
@@ -74,7 +74,7 @@ export default class Server {
             case PacketType.SERVER_LIST_PING: {
                 console.log("Got Server List Ping Request")
                 console.log("Sending Server List Ping to client")
-                await kick_packet(conn, `A Meincroft Server§${this._clients.length}§10`);
+                await kick_packet(conn, `A Minecraft Server§${this._clients.length}§10`);
             } break;
             default: {
                 console.log(`Unknown packet with id (char='${String.fromCharCode(packet_id)}', value=${packet_id}, hex=0x${packet_id.toString(16)})`);

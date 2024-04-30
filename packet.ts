@@ -9,7 +9,7 @@ export enum PacketType {
 }
 
 export async function handshake_packet(conn: Deno.Conn, hash: string) {
-    // 2 0 1 0 49
+    // 2 0 1 0 45
     const writer = new ByteWriter();
     writer.write(Type.BYTE, PacketType.HANDSHAKE);
     writer.write(Type.BYTE, hash.length);

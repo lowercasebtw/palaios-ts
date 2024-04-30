@@ -1,21 +1,27 @@
-// https://wiki.vg/VarInt_And_VarLong
+export class ByteUtil {
+    /**
+     * Packets cannot be larger than 221 − 1 or 2097151 bytes 
+     * (the maximum that can be sent in a 3-byte VarInt). 
+     * Moreover, the length field must not be longer than 3 bytes, even if the encoded value 
+     * is within the limit. Unnecessarily long encodings at 3 bytes or below are still allowed. 
+     * For compressed packets, this applies to the Packet Length field, i.e. the compressed length.
+     */
+    static readonly MAX_BYTES_ALLOWED = 2097151; 
 
-const SEGMENT_BITS = 0x7F;
-const CONTINUE_BIT = 0x80;
+    // TODO: wont need probably in the future
+    // @Deprecated
+    static as_bytes(bytes: string) {
+        return new Uint8Array([...bytes].map(c => c.charCodeAt(0)));
+    }
 
-/**
- * Packets cannot be larger than 221 − 1 or 2097151 bytes 
- * (the maximum that can be sent in a 3-byte VarInt). 
- * Moreover, the length field must not be longer than 3 bytes, even if the encoded value 
- * is within the limit. Unnecessarily long encodings at 3 bytes or below are still allowed. 
- * For compressed packets, this applies to the Packet Length field, i.e. the compressed length.
- */
-export const MAX_BYTES_ALLOWED = 2097151; 
-
-// TODO: wont need probably in the future
-// @Deprecated
-export function as_bytes(bytes: string) {
-    return new Uint8Array([...bytes].map(c => c.charCodeAt(0)));
+    // TODO: wont need probably in the future
+    // @Deprecated
+    static as_string(bytes: Uint8Array, null_terminated = false) {
+        let string = "";
+        for (let i = null_terminated ? 3 : 0; i < bytes.length; ++i)
+            string += String.fromCharCode(bytes[i]);
+        return string;
+    }
 }
 
 export enum Type {
@@ -24,6 +30,10 @@ export enum Type {
     VAR_INT,
     VAR_LONG
 }
+
+// https://wiki.vg/VarInt_And_VarLong
+const SEGMENT_BITS = 0x7F;
+const CONTINUE_BIT = 0x80;
 
 export class ByteWriter {
     private bytes: number[];
