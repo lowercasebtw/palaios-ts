@@ -1,3 +1,5 @@
+import { un_spaceify } from "./util.ts";
+
 export class ByteUtil {
     /**
      * Packets cannot be larger than 221 − 1 or 2097151 bytes 
@@ -25,7 +27,14 @@ export class ByteUtil {
 }
 
 export enum Type {
+    BOOLEAN,
+    INT,
+    FLOAT,
+    DOUBLE,
+    LONG,
+    SHORT,
     BYTE,
+    UNSIGNED_BYTE,
     STRING,
     VAR_INT,
     VAR_LONG
@@ -35,44 +44,72 @@ export enum Type {
 const SEGMENT_BITS = 0x7F;
 const CONTINUE_BIT = 0x80;
 
+// TODO: Very Big Chance, this function is severly wrong
+function getBytesForNumberSized(num: number, size: number) {
+    const bytes: number[] = [];
+    let i = size;
+    do {
+        bytes[--i] = num & 255;
+        num = num >> size;
+    } while (i)
+    return bytes;
+}
+
 export class ByteWriter {
-    private bytes: number[];
+    private _bytes: number[];
     public constructor() {
-        this.bytes = [];
+        this._bytes = [];
     }
 
     *[Symbol.iterator]() {
-        for (let i = 0; i < this.bytes.length; ++i)
-            yield this.bytes[i];
+        for (let i = 0; i < this._bytes.length; ++i)
+            yield this._bytes[i];
     }
 
     append(other: ByteWriter) {
-        this.bytes.push(...other);
+        this._bytes.push(...other);
         return this;
     }
 
-    write(type: Type, value: number | string) {
+    write(type: Type, value: boolean | number | string) {
         switch (type) {
-            case Type.BYTE: {
-                this.bytes.push((value as number), 0x00); // 0x00 is WRONG
+            case Type.BOOLEAN: {
+                this._bytes.push((value as boolean) == false ? 0 : 1);
+            } break;
+            case Type.INT:
+            case Type.FLOAT: {
+                this._bytes.push(...getBytesForNumberSized((value as number), 4));
+            } break;
+            case Type.LONG:
+            case Type.DOUBLE: {
+                this._bytes.push(...getBytesForNumberSized((value as number), 8));
+            } break;
+            case Type.SHORT: {
+                // this._bytes.push(...getBytesForNumberSized((value as number), 2));
+                // TODO: Fix, ^ breaks it
+                this._bytes.push((value as number), 0);
+            } break;
+            case Type.BYTE:
+            case Type.UNSIGNED_BYTE: {
+                this._bytes.push((value as number));
             } break;
             case Type.STRING: {
-                const length = (value as string).length;
-                const buf = new ArrayBuffer(length * 2);
-                const bufView = new Uint16Array(buf);
-                for (let i = 0, strLen = length; i < strLen; i++) 
-                    bufView[i] = (value as string).charCodeAt(i);
-                const bytes = new Uint8Array(buf);
-                this.bytes.push(...bytes.slice(0, bytes.length - 1));
-            } break;
+                const string = value as string;
+                this.write(Type.SHORT, string.length);
+                for (let i = 0; i < string.length; ++i) {
+                    this.write(Type.BYTE, string[i].charCodeAt(0));
+                    if (i != string.length - 1)
+                        this.write(Type.BYTE, 0);
+                }
+            }  break;
             case Type.VAR_INT: 
             case Type.VAR_LONG: {
                 while (true) {
                     if (((value as number) & ~SEGMENT_BITS) == 0) {
-                        this.bytes.push((value as number));
+                        this.write(Type.BYTE, value);
                         return;
                     }
-                    this.bytes.push(((value as number) & SEGMENT_BITS) | CONTINUE_BIT);
+                    this.write(Type.BYTE, ((value as number) & SEGMENT_BITS) | CONTINUE_BIT);            
                     (value as number) >>>= 7;
                 }
             }
@@ -83,13 +120,11 @@ export class ByteWriter {
     }
 
     build() {
-        return new Uint8Array(this.bytes);
+        return new Uint8Array(this._bytes);
     }
 
-    async push(conn: Deno.Conn, prepend_length = true) {
+    async push(conn: Deno.Conn) {
         const writer = new ByteWriter();
-        if (prepend_length)
-            writer.write(Type.VAR_INT, this.bytes.length);
         writer.append(this);
         return await conn.write(writer.build());
     }
@@ -109,24 +144,47 @@ export class ByteReader {
 
     get cursor() { return this._cursor; }
 
-    read(type: Type): number | string {
+    read(type: Type): boolean | number | string {
         switch (type) {
-            case Type.BYTE: {
-                return this.at_end() ? 0 : this._bytes[this._cursor++];
+            case Type.BOOLEAN: {
+                return this.read(Type.BYTE) == 0 ? false : true;
+            }
+            case Type.INT:
+            case Type.FLOAT: {
+                let v = 0;
+                for (let i = 0; i < 4; ++i)
+                    v += this.read(Type.BYTE) as number;
+                return v;
+            }
+            case Type.LONG:
+            case Type.DOUBLE: {
+                let v = 0;
+                for (let i = 0; i < 8; ++i)
+                    v += this.read(Type.BYTE) as number;
+                return v;
+            }
+            case Type.SHORT: {
+                let v = 0;
+                for (let i = 0; i < 2; ++i)
+                    v += this.read(Type.BYTE) as number;
+                return v;
+            }
+            case Type.BYTE:
+            case Type.UNSIGNED_BYTE: {
+                return this._bytes[this._cursor++];
             }
             case Type.STRING: {
-                // wrong
-                const length = this.read(Type.BYTE) as number;
-                let str = "";
+                const length = this.read(Type.SHORT) as number + 6;
+                let string = "";
                 for (let i = 0; i < length; ++i)
-                    str += String.fromCharCode(this.read(Type.BYTE) as number);
-                return str;
+                    string += String.fromCharCode(this.read(Type.BYTE) as number);
+                return un_spaceify(string);
             }
             case Type.VAR_INT: 
             case Type.VAR_LONG: {
                 let value = 0;
                 let position = 0;
-                let currentByte;
+                let currentByte: number;
                 while (true) {
                     currentByte = this.read(Type.BYTE) as number;
                     value |= (currentByte & SEGMENT_BITS) << position;

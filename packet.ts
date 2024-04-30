@@ -1,34 +1,47 @@
 import { ByteWriter, Type } from "./util/byte.ts";
 // import { server } from "./index.ts";
 
-export enum PacketType {
-    LOGIN = 0x1,
-    HANDSHAKE = 0x02,
-    KICK = 0xff,
-    SERVER_LIST_PING = 0xfe
+export enum ProtocolVersion {
+    v1_2_4_to_1_2_5 = 29
 }
 
-export async function handshake_packet(conn: Deno.Conn, hash: string) {
+export enum PacketType {
+    LOGIN_REQUEST = 0x01,
+    HANDSHAKE = 0x02,
+    KICK = 0xFF,
+    SERVER_LIST_PING = 0xFE
+}
+
+// NOTE: For some reason, it now only works if I send the packet id as a short
+
+export async function login_packet(client: Deno.Conn) {
+    const writter = new ByteWriter();
+
+    writter.write(Type.SHORT, PacketType.LOGIN_REQUEST);
+    writter.write(Type.INT, 1); // Entity ID
+    writter.write(Type.STRING, ""); // unused
+    writter.write(Type.STRING, "default"); // Level Type
+    writter.write(Type.INT, 1); // Gamemode
+    writter.write(Type.INT, 0); // Dimension
+    writter.write(Type.BYTE, 0); // Difficulty
+    writter.write(Type.UNSIGNED_BYTE, 0); // unused
+    writter.write(Type.UNSIGNED_BYTE, 1); // Player Count
+
+    console.log(writter.build());
+    await writter.push(client);
+}
+
+export async function handshake_packet(client: Deno.Conn, hash: string) {
     // 2 0 1 0 45
     const writer = new ByteWriter();
-    writer.write(Type.BYTE, PacketType.HANDSHAKE);
-    writer.write(Type.BYTE, hash.length);
+    writer.write(Type.SHORT, PacketType.HANDSHAKE);
     writer.write(Type.STRING, hash);
-    await writer.push(conn, false);
+    await writer.push(client);
 }
 
-export async function kick_packet(conn: Deno.Conn, reason: string, uuid?: string | null) {
+export async function kick_packet(client: Deno.Conn, reason: string) {
     const writer = new ByteWriter();
-    writer.write(Type.BYTE,   PacketType.KICK);
-    writer.write(Type.BYTE,   reason.length);
+    writer.write(Type.SHORT, PacketType.KICK);
     writer.write(Type.STRING, reason);
-    // if (uuid) 
-    //     server.removeClientWithUUID(uuid);
-    await writer.push(conn, false);
-
-    // Byte   PACKET ID
-    // Byte   LENGTH OF MSG
-    // Byte[] ...MSG BYTES
-
-    // [PACKET_ID, 0x00, LENGTH, 0x00, ...bytes + 0x0 per byte]
+    await writer.push(client);
 }
