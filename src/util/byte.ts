@@ -1,4 +1,5 @@
 import { Buffer } from "https://deno.land/std@0.177.0/node/buffer.ts";
+import { un_spaceify } from "./util.ts";
 
 // https://wiki.vg/Data_types
 
@@ -134,9 +135,7 @@ export class ByteWriter {
     }
 
     async push(conn: Deno.Conn) {
-        const writer = new ByteWriter();
-        writer.append(this);
-        return await conn.write(writer.build());
+        return await conn.write(this.build());
     }
 }
 
@@ -197,7 +196,7 @@ export class ByteReader {
 
             case Type.STRING: {
                 const length = this.read(Type.SHORT) as number;
-                return String.fromCharCode(...this.readBytes(length)!);
+                return un_spaceify(String.fromCharCode(...this.readBytes(length)!));
             }
 
             case Type.BYTE:

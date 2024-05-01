@@ -1,9 +1,9 @@
 // https://wiki.vg/index.php?title=Protocol&oldid=932
 
 import { EntityType } from "./game/entity/EntityType.ts";
-import { Level, Logger } from "./logger/Logger.ts";
 import { ByteWriter, Type } from "./util/byte.ts";
 import { DimensionType, Gamemode, WorldType } from "./util/types.ts";
+import { server } from "./index.ts";
 
 export enum ProtocolVersion {
     v1_2_4_to_1_2_5 = 29
@@ -82,6 +82,12 @@ export enum PacketType {
 // NOTE: For some reason, it now only works if I send the packet id as a short
 
 export async function login_packet(client: Deno.Conn) {
+    const player = server.getPlayerWithRID(client.rid);
+    if (player == null) {
+        await kick_packet(client, "Player is null");
+        return;
+    }
+
     const writer = new ByteWriter();
     // TODO: Get World/Dimension info for player
     // TODO: Work on this, doesn't work
@@ -89,9 +95,9 @@ export async function login_packet(client: Deno.Conn) {
     writer.write(Type.INT, EntityType.PLAYER); // Entity ID
     writer.write(Type.STRING, ""); // unused
     writer.write(Type.STRING, WorldType.DEFAULT); // Level Type
-    writer.write(Type.INT, Gamemode.CREATIVE); // Gamemode
-    writer.write(Type.INT, DimensionType.OVERWORLD); // Dimension
-    writer.write(Type.BYTE, 0); // Difficulty
+    writer.write(Type.INT, player.getGamemode()); // Gamemode
+    writer.write(Type.INT, player.getLocation().getDimensionType()); // Dimension
+    writer.write(Type.BYTE, server.getDifficulty()); // Difficulty
     writer.write(Type.UNSIGNED_BYTE, 0); // unused
     writer.write(Type.UNSIGNED_BYTE, 1); // Max Player Count
     await writer.push(client);
@@ -109,6 +115,5 @@ export async function kick_packet(client: Deno.Conn, reason: string) {
     const writer = new ByteWriter();
     writer.write(Type.SHORT, PacketType.DISCONNECT_KICK);
     writer.write(Type.STRING, reason);
-    console.log(writer.build())
     await writer.push(client);
 }

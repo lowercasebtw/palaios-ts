@@ -1,18 +1,17 @@
 import { DimensionType, WorldType } from "../../util/types.ts";
 import { Entity } from "../entity/Entity.ts";
+import { Player } from "../entity/Player.ts";
 import Chunk from "./Chunk.ts";
 
 export default class World {
-    private chunks: Chunk[];
-    private entities: Entity[];
+    private _chunks: Chunk[];
 
     private file_name: string;
     private dimension: DimensionType;
     private type: WorldType;
 
     public constructor(file_name: string, dimension_type = DimensionType.OVERWORLD, world_type = WorldType.DEFAULT) {
-        this.chunks = [];
-        this.entities = [];
+        this._chunks = [];
         this.file_name = file_name;
         this.dimension = dimension_type;
         this.type = world_type;
@@ -27,13 +26,11 @@ export default class World {
         }
     }
 
-    getEntities() { return this.entities; }
-
     getDimensionType() { return this.dimension; }
     
     getWorldType() { return this.type; }
 
     getChunkAt(x: number, z: number): Chunk | null { 
-        return this.chunks[z * 128 + x] ?? null; 
+        return this._chunks[z * 128 + x] ?? null; 
     }
 }
