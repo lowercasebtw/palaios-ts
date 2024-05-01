@@ -135,6 +135,8 @@ export class ByteWriter {
     }
 
     async push(conn: Deno.Conn) {
+        if (!conn.writable)
+            return;
         return await conn.write(this.build());
     }
 }

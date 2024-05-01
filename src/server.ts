@@ -42,6 +42,7 @@ export default class Server {
 
     getDifficulty() { return this._difficulty; }
 
+    // horrid
     getOverworld() {
         return this._overworld;
     }
@@ -57,10 +58,12 @@ export default class Server {
     getEntities() { return this._entities; }
 
     addEntity(entity: Entity) {
+        // horrid
         this._entities.push(entity);
     }
 
     getPlayerWithUUID(uuid: string) {
+        // horrid
         const players = this.getEntitiesOf(EntityType.PLAYER);
         const it = players.find(player => (player as Player).getUUID() == uuid);
         if (!it)
@@ -69,6 +72,7 @@ export default class Server {
     }
 
     getPlayerWithRID(rid: number): Player | null {
+        // horrid
         const players = this.getEntitiesOf(EntityType.PLAYER);
         const it = players.find(player => (player as Player).getRID() == rid);
         if (!it)
@@ -76,7 +80,17 @@ export default class Server {
         return it as Player;
     }
 
+    removePlayerWithRID(rid: number) {
+        // horrid
+        this._entities = this._entities.filter(entity => {
+            if (entity instanceof Player)
+                return entity.getRID() == rid;
+            return false;
+        });
+    }
+
     getEntitiesOf(type: EntityType) {
+        // horrid
         return this._entities.filter(entity => entity.getType() == type);
     }
 
@@ -103,8 +117,6 @@ export default class Server {
                 })
             });
         }
-
-        // TODO: Handle cleaning of connections?
     }
 
     private broadcast(message: string) {
@@ -116,6 +128,18 @@ export default class Server {
         }
     }
 
+    private disconnect(rid: number) {
+        const it = this._connection_handlers.find(c => c.connection.rid == rid);
+        if (!it?.connection.writable)
+            it?.connection.close();
+        
+        clearInterval(it?.handler_id);
+        this._connection_handlers.splice(this._connection_handlers.findIndex(c => c.connection.rid == rid), 1);
+        
+        // TODO: save data
+        this.removePlayerWithRID(rid);
+    }
+
     private async handle_packet(client: Deno.Conn, bytes: Uint8Array) {
         const reader = new ByteReader(bytes);
         const packet_id = reader.read(Type.BYTE) as number;
@@ -123,6 +147,14 @@ export default class Server {
         switch (packet_id) {
             case PacketType.KEEP_ALIVE: {
                 // Keep Alive
+                const id = Math.floor(Math.random() * 10000);
+
+                const writer = new ByteWriter();
+                writer.write(Type.SHORT, PacketType.KEEP_ALIVE);
+                writer.write(Type.INT, id);
+                await writer.push(client);
+
+                // TODO: handle it receiving back
             } break;
             
             case PacketType.LOGIN_REQUEST: {
@@ -141,8 +173,9 @@ export default class Server {
                     return;
                 }
 
-                this.addEntity(new Player(client.rid, uuid));
-                await login_packet(client);
+                const player = new Player(client.rid, uuid);
+                this.addEntity(player);
+                await login_packet(client, player);
             } break;
 
             case PacketType.HANDSHAKE: {
@@ -220,7 +253,7 @@ export default class Server {
                 const old_location = player.getLocation();
                 player.setLocation(new Location(old_location.getDimensionType(), new Vec3d(x, y, z), yaw, pitch), on_ground);
 
-                await client.write(bytes);
+                // TODO: figure out weirdness
                 // const writer = new ByteWriter();
                 // writer.write(Type.SHORT, PacketType.PLAYER_POSITION_LOOK);
                 // writer.write(Type.DOUBLE, x);
@@ -231,6 +264,8 @@ export default class Server {
                 // writer.write(Type.FLOAT, pitch);
                 // writer.write(Type.BOOLEAN, on_ground);
                 // await writer.push(client);
+
+                await client.write(bytes);
             } break;
 
             case PacketType.SERVER_LIST_PING: {
@@ -238,7 +273,8 @@ export default class Server {
             } break;
 
             case PacketType.DISCONNECT_KICK: {
-                // 
+                // Left
+                this.disconnect(client.rid);
             } break;
 
             default: {

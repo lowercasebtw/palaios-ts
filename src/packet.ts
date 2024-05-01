@@ -4,6 +4,7 @@ import { EntityType } from "./game/entity/EntityType.ts";
 import { ByteWriter, Type } from "./util/byte.ts";
 import { DimensionType, Gamemode, WorldType } from "./util/types.ts";
 import { server } from "./index.ts";
+import { Player } from "./game/entity/Player.ts";
 
 export enum ProtocolVersion {
     v1_2_4_to_1_2_5 = 29
@@ -60,13 +61,13 @@ export enum PacketType {
     // 1.48	Sound/Particle Effect (0x3D)
     // 1.49	Change Game State (0x46)
     // 1.50	Thunderbolt (0x47)
-    // 1.51	Open Window (0x64)
-    // 1.52	Close Window (0x65)
-    // 1.53	Click Window (0x66)
+    OPEN_WINDOW = 0x64,
+    CLOSE_WINDOW = 0x65,
+    CLICK_WINDOW = 0x66,
     SET_SLOT = 0x67,
-    // 1.55	Set Window Items (0x68)
-    // 1.56	Update Window Property (0x69)
-    // 1.57	Confirm Transaction (0x6A)
+    SET_WINDOW_ITEMS = 0x68,
+    UPDATE_WINDOW_PROPERTY = 0x69, // nice
+    CONFIRM_TRANSACTION = 0x6A,
     ENCHANT_ITEM = 0x6C,
     UPDATE_SIGN = 0x82,
     ITEM_DATA = 0x83,
@@ -81,13 +82,7 @@ export enum PacketType {
 
 // NOTE: For some reason, it now only works if I send the packet id as a short
 
-export async function login_packet(client: Deno.Conn) {
-    const player = server.getPlayerWithRID(client.rid);
-    if (player == null) {
-        await kick_packet(client, "Player is null");
-        return;
-    }
-
+export async function login_packet(client: Deno.Conn, player: Player) {
     const writer = new ByteWriter();
     // TODO: Get World/Dimension info for player
     // TODO: Work on this, doesn't work
