@@ -2,9 +2,10 @@
 
 import { EntityType } from "./game/entity/EntityType.ts";
 import { ByteWriter, Type } from "./util/byte.ts";
-import { WorldType } from "./util/types.ts";
-import { server } from "./index.ts";
 import { Player } from "./game/entity/Player.ts";
+import Server from "./server.ts";
+import ClientConnection from "./util/connection.ts";
+import ItemStack from "./game/item/ItemStack.ts";
 
 export enum ProtocolVersion {
     v1_2_4_to_1_2_5 = 29
@@ -34,33 +35,33 @@ export enum PacketType {
     SPAWN_NAMED_ENTITY = 0x14,
     SPAWN_DROPPED_ITEM = 0x15,
     COLLECT_ITEM = 0x16,
-    // 1.24	Spawn Object/Vehicle (0x17)
-    // 1.25	Spawn Mob (0x18)
-    // 1.26	Spawn Painting (0x19)
-    // 1.27	Spawn Experience Orb (0x1A)
-    // 1.28	Entity Velocity (0x1C)
-    // 1.29	Destroy Entity (0x1D)
-    // 1.30	Entity (0x1E)
-    // 1.31	Entity Relative Move (0x1F)
-    // 1.32	Entity Look (0x20)
-    // 1.33	Entity Look and Relative Move (0x21)
-    // 1.34	Entity Teleport (0x22)
-    // 1.35	Entity Head Look (0x23)
-    // 1.36	Entity Status (0x26)
-    // 1.37	Attach Entity (0x27)
-    // 1.38	Entity Metadata (0x28)
-    // 1.39	Entity Effect (0x29)
-    // 1.40	Remove Entity Effect (0x2A)
-    // 1.41	Set Experience (0x2B)
-    // 1.42	Chunk Allocation (0x32)
-    // 1.43	Chunk Data (0x33)
-    // 1.44	Multi Block Change (0x34)
-    // 1.45	Block Change (0x35)
-    // 1.46	Block Action (0x36)
-    // 1.47	Explosion (0x3C)
-    // 1.48	Sound/Particle Effect (0x3D)
-    // 1.49	Change Game State (0x46)
-    // 1.50	Thunderbolt (0x47)
+    SPAWN_OBJECT_VEHICLE = 0x17,
+    SPAWN_MOB = 0x18,
+    SPAWN_PAINTING = 0x19,
+    SPAWN_EXPERIENCE_ORB = 0x1A,
+    ENTITY_VEHICLE = 0x1C,
+    DESTROY_ENTITY = 0x1D,
+    ENTITY = 0x1E,
+    ENTITY_RELATIVE_MOVE = 0x1F,
+    ENTITY_LOOK = 0x20,
+    ENTITY_LOOK_RELATIVE_MOVE = 0x21,
+    ENTITY_TELEPORT = 0x22,
+    ENTITY_HEAD_LOOK = 0x23,
+    ENTITY_STATUS = 0x26,
+    ATTACH_ENTITY = 0x27,
+    ENTITY_METADATA = 0x28,
+    ENTITY_EFFECT = 0x29,
+    REMOVE_ENTITY_EFFECT = 0x2A,
+    SET_EXPERIENCE = 0x2B,
+    CHUNK_ALLOCATION = 0x32,
+    CHUNK_DATA = 0x33,
+    MULTI_BLOCK_CHANGE = 0x34,
+    BLOCK_CHANGE = 0x35,
+    BLOCK_ACTION = 0x36,
+    EXPLOSION = 0x3C,
+    SOUND_PARTICLE_EFFECT = 0x3D,
+    CHANGE_GAME_STATE = 0x46,
+    THUNDERBOLT = 0x47,
     OPEN_WINDOW = 0x64,
     CLOSE_WINDOW = 0x65,
     CLICK_WINDOW = 0x66,
@@ -80,33 +81,40 @@ export enum PacketType {
     DISCONNECT_KICK = 0xFF,
 }
 
-// NOTE: For some reason, it now only works if I send the packet id as a short
-
-export async function login_packet(client: Deno.Conn, player: Player) {
+export async function login_request_packet(client: ClientConnection, server: Server, player: Player) {
     const writer = new ByteWriter();
-    // TODO: Get World/Dimension info for player
-    // TODO: Work on this, doesn't work
     writer.write(Type.SHORT, PacketType.LOGIN_REQUEST);
-    writer.write(Type.INT, EntityType.PLAYER); // Entity ID
-    writer.write(Type.STRING, ""); // unused
-    writer.write(Type.STRING, WorldType.DEFAULT); // Level Type
-    writer.write(Type.INT, player.getGamemode()); // Gamemode
-    writer.write(Type.INT, player.getLocation().getDimensionType()); // Dimension
-    writer.write(Type.BYTE, server.getDifficulty()); // Difficulty
-    writer.write(Type.UNSIGNED_BYTE, 0); // unused
-    writer.write(Type.UNSIGNED_BYTE, 1); // Max Player Count
+    writer.write(Type.INT, EntityType.PLAYER);
+    writer.write(Type.STRING, "");
+    writer.write(Type.STRING, server.getWorldType());
+    writer.write(Type.INT, player.getGamemode());
+    writer.write(Type.INT, player.getLocation().getDimensionType());
+    writer.write(Type.BYTE, server.getDifficulty());
+    writer.write(Type.UNSIGNED_BYTE, 0);
+    writer.write(Type.UNSIGNED_BYTE, server.getMaxPlayerCount());
     await writer.push(client);
 }
 
-export async function handshake_packet(client: Deno.Conn, hash: string) {
-    // 2 0 1 0 45
+export async function handshake_packet(client: ClientConnection, hash: string) {
     const writer = new ByteWriter();
     writer.write(Type.SHORT, PacketType.HANDSHAKE);
     writer.write(Type.STRING, hash);
     await writer.push(client);
 }
 
-export async function kick_packet(client: Deno.Conn, reason: string) {
+export async function set_window_items_packet(client: ClientConnection, window_id: number, items: ItemStack[]) {
+    if (items.length < 44)
+        return; // invalid
+    const writer = new ByteWriter();
+    writer.write(Type.SHORT, PacketType.SET_WINDOW_ITEMS);
+    writer.write(Type.BYTE, window_id);
+    writer.write(Type.SHORT, items.length);
+    for (const itemStack of items) 
+        writer.append(itemStack.bytes());
+    await writer.push(client);
+}
+
+export async function kick_packet(client: ClientConnection, reason: string) {
     const writer = new ByteWriter();
     writer.write(Type.SHORT, PacketType.DISCONNECT_KICK);
     writer.write(Type.STRING, reason);

@@ -26,6 +26,10 @@ export class Location {
     getPosition() { return this._position; }
 
     getYaw() { return this._yaw; }
+
+    setYaw(yaw: number) { this._yaw = yaw; }
     
     getPitch() { return this._pitch; }
+    
+    setPitch(pitch: number) { this._pitch = pitch; }
 }

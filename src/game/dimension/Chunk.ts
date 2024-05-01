@@ -8,6 +8,6 @@ export default class Chunk {
 
     getBlockAt(x: number, y: number, z: number): Block | null { 
         // TODO
-        return null;
+        throw new Error("meow");
     }
 }

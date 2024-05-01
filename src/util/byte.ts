@@ -1,5 +1,6 @@
 import { Buffer } from "https://deno.land/std@0.177.0/node/buffer.ts";
 import { un_spaceify } from "./util.ts";
+import ClientConnection from "./connection.ts";
 
 // https://wiki.vg/Data_types
 
@@ -58,7 +59,7 @@ export class ByteWriter {
             yield this._bytes[i];
     }
 
-    append(other: ByteWriter) {
+    append(other: ByteWriter | Uint8Array | number[]) {
         this._bytes.push(...other);
         return this;
     }
@@ -134,7 +135,7 @@ export class ByteWriter {
         return new Uint8Array(this._bytes);
     }
 
-    async push(conn: Deno.Conn) {
+    async push(conn: ClientConnection) {
         if (!conn.writable)
             return;
         return await conn.write(this.build());
