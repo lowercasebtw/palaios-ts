@@ -2,7 +2,7 @@
 
 import { EntityType } from "./game/entity/EntityType.ts";
 import { ByteWriter, Type } from "./util/byte.ts";
-import { DimensionType, Gamemode, WorldType } from "./util/types.ts";
+import { WorldType } from "./util/types.ts";
 import { server } from "./index.ts";
 import { Player } from "./game/entity/Player.ts";
 
