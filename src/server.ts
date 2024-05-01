@@ -48,11 +48,11 @@ export default class Server {
     }
 
     getNether() {
-        return this._overworld;
+        return this._nether;
     }
 
     getTheEnd() {
-        return this._overworld;
+        return this._the_end;
     }
 
     getEntities() { return this._entities; }

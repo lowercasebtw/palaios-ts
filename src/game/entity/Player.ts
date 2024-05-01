@@ -4,6 +4,7 @@ import { EntityType } from "./EntityType.ts";
 
 export class Player extends Entity {
     private _rid: number;
+    // TODO: UUID class, because uuid is actually numbers
     private _uuid: string;
     private _gamemode: Gamemode;
 
