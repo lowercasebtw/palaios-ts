@@ -37,3 +37,16 @@ export enum Gamemode {
     SURVIVAL = 0,
     CREATIVE = 1
 }
+
+export type ServerProperties = {
+    level_seed: number;
+    gamemode: "creative" | "survival"
+    motd: string;
+    difficulty: "peaceful" | "easy" | "normal" | "hard";
+    max_players: number;
+    online_mode: boolean;
+    address: string;
+    port: number;
+    log_ips: boolean;
+    level_type: "default";
+}

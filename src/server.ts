@@ -2,7 +2,7 @@ import { ByteReader, Type } from "./util/byte.ts";
 import { ProtocolVersion, handshake_packet, login_request_packet } from "./packet.ts";
 import { PacketType, kick_packet } from "./packet.ts";
 import World from "./game/dimension/World.ts";
-import { Difficulty, DimensionType, WorldType } from "./util/types.ts";
+import { Difficulty, DimensionType, ServerProperties, WorldType } from "./util/types.ts";
 import { Level, Logger } from "./logger/Logger.ts";
 import { fetchUUID } from "./util/util.ts";
 import { Player } from "./game/entity/Player.ts";
@@ -14,14 +14,10 @@ import { ByteWriter } from "./util/byte.ts";
 import ClientConnection from "./util/connection.ts";
 
 export default class Server {
-    private _address: string;
-    private _port: number;
-
     private _listener: Deno.Listener<Deno.Conn> | null;
     private _clients: ClientConnection[];
 
     private _online_player_count: number;
-    private _max_player_count: number;
 
     private _entities: Entity[];
 
@@ -31,29 +27,77 @@ export default class Server {
     private _nether: World;
     private _the_end: World;
 
-    public constructor(address: string, port: number) {
-        this._address = address;
-        this._port = port;
+    private _properties: ServerProperties;
+
+    public constructor(address: string | null = null, port: number | null = null) {
         this._listener = null;
         this._clients = [];
 
         // Could be wrong implementation
         this._online_player_count = 0;
-        this._max_player_count = 10;
         this._entities = [];
         this._difficulty = Difficulty.PEACEFUL;
         this._world_type = WorldType.DEFAULT;
         this._overworld = new World("worlds/world", DimensionType.OVERWORLD, WorldType.DEFAULT);
         this._nether = new World("worlds/nether", DimensionType.NETHER, WorldType.DEFAULT);
         this._the_end = new World("worlds/end", DimensionType.THE_END, WorldType.DEFAULT);
+    
+        this._properties = this.load_properties();
+        if (address != null)
+            this._properties.address = address;
+        if (port != null)
+            this._properties.port = port;
+    }
+
+    private load_properties(): ServerProperties {
+        let data: string = "";
+        try {
+            data = Deno.readTextFileSync("./server.properties");
+        // deno-lint-ignore no-unused-vars no-empty
+        } catch(e) {
+        }
+        
+        const properties: ServerProperties = {
+            level_seed: 0,
+            gamemode: "creative",
+            motd: "A Minecraft Server",
+            difficulty: "normal",
+            max_players: 10,
+            online_mode: false,
+            address: "0.0.0.0",
+            port: 25565,
+            log_ips: false,
+            level_type: "default"
+        };
+        for (const line of data.split('\n')) {
+            const parts = line.split('=');
+            if (parts.length < 2)
+                continue;
+
+            const key = parts[0].replace('-', '_');
+            if (!(key in properties) && key != "server_ip" && key != "server_port") {
+                // invalid key
+                continue;
+            }
+
+            const value = parts[1].replaceAll('\r', '');
+            switch (key) {
+                // dirty
+                case "server_ip": { properties.address = value; } break;
+                case "server_port": { properties.port = parseInt(value); } break;
+                default: { (properties as any)[key] = value; } break;
+            }
+        }
+
+        return properties as ServerProperties;
     }
 
     async listen() {
         if (this._listener != null)
             return;
         
-        this._listener = Deno.listen({ hostname: this._address, port: this._port });
-        Logger.log(Level.INFO, `Listening on ${this._address == "0.0.0.0" ? "localhost" : this._address}:${this._port}`);
+        this._listener = Deno.listen({ hostname: this._properties.address, port: this._properties.port });
+        Logger.log(Level.INFO, `Listening on ${this._properties.address == "0.0.0.0" ? "localhost" : this._properties.address}:${this._properties.port}`);
         for await (const conn of this._listener) {
             const client = new ClientConnection(conn);
             client.setHandler(setInterval(async () => {
@@ -73,7 +117,7 @@ export default class Server {
 
     getOnlinePlayerCount() { return this._online_player_count; }
 
-    getMaxPlayerCount() { return this._max_player_count; }
+    getMaxPlayerCount() { return this._properties.max_players; }
 
     // horrid
     getOverworld() {
@@ -311,7 +355,7 @@ export default class Server {
             } break;
 
             case PacketType.SERVER_LIST_PING: {
-                await kick_packet(client, `A Minecraft Server§${this._online_player_count}§${this._max_player_count}`);
+                await kick_packet(client, `${this._properties.motd}§${this._online_player_count}§${this._properties.max_players}`);
             } break;
 
             case PacketType.DISCONNECT_KICK: {
