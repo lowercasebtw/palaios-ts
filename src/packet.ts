@@ -1,11 +1,11 @@
 // https://wiki.vg/index.php?title=Protocol&oldid=932
 
-import { EntityType } from "./game/entity/EntityType.ts";
-import { ByteWriter, Type } from "./util/byte.ts";
-import { Player } from "./game/entity/Player.ts";
-import Server from "./server.ts";
-import ClientConnection from "./util/connection.ts";
-import ItemStack from "./game/item/ItemStack.ts";
+import { Client } from "https://deno.land/x/tcp_socket@0.0.1/mods.ts";
+import { ByteWriter, Type } from "../src/util/byte.ts";
+import ItemStack from "../src/game/item/ItemStack.ts";
+import { EntityType } from "../src/game/entity/EntityType.ts";
+import MinecraftServer from "./server.ts";
+import { Player } from "../src/game/entity/Player.ts";
 
 export enum ProtocolVersion {
     v1_2_4_to_1_2_5 = 29
@@ -81,7 +81,7 @@ export enum PacketType {
     DISCONNECT_KICK = 0xFF,
 }
 
-export async function login_request_packet(client: ClientConnection, server: Server, player: Player) {
+export async function login_request_packet(client: Client, server: MinecraftServer, player: Player) {
     const writer = new ByteWriter();
     writer.write(Type.SHORT, PacketType.LOGIN_REQUEST);
     writer.write(Type.INT, EntityType.PLAYER);
@@ -92,17 +92,17 @@ export async function login_request_packet(client: ClientConnection, server: Ser
     writer.write(Type.BYTE, server.getDifficulty());
     writer.write(Type.UNSIGNED_BYTE, 0);
     writer.write(Type.UNSIGNED_BYTE, server.getMaxPlayerCount());
-    await writer.push(client);
+    await client.write(writer.build());
 }
 
-export async function handshake_packet(client: ClientConnection, hash: string) {
+export async function handshake_packet(client: Client, hash: string) {
     const writer = new ByteWriter();
     writer.write(Type.SHORT, PacketType.HANDSHAKE);
     writer.write(Type.STRING, hash);
-    await writer.push(client);
+    await client.write(writer.build());
 }
 
-export async function set_window_items_packet(client: ClientConnection, window_id: number, items: ItemStack[]) {
+export async function set_window_items_packet(client: Client, window_id: number, items: ItemStack[]) {
     if (items.length < 44)
         return; // invalid
     const writer = new ByteWriter();
@@ -111,12 +111,12 @@ export async function set_window_items_packet(client: ClientConnection, window_i
     writer.write(Type.SHORT, items.length);
     for (const itemStack of items) 
         writer.append(itemStack.bytes());
-    await writer.push(client);
+    await client.write(writer.build());
 }
 
-export async function kick_packet(client: ClientConnection, reason: string) {
+export async function kick_packet(client: Client, reason: string) {
     const writer = new ByteWriter();
     writer.write(Type.SHORT, PacketType.DISCONNECT_KICK);
     writer.write(Type.STRING, reason);
-    await writer.push(client);
+    await client.write(writer.build());
 }

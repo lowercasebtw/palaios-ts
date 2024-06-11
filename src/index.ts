@@ -1,3 +1,4 @@
-import Server from "./server.ts";
-export const server = new Server();
+import MinecraftServer from "./server.ts";
+
+export const server = new MinecraftServer();
 await server.listen();

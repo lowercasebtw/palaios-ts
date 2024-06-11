@@ -6,18 +6,16 @@ export default class ClientConnection {
     private _id: number;
     private _connection: Deno.Conn;
     private _handler_id: number | null;
-    private _closed: boolean;
     
     public constructor(connection: Deno.Conn) {
         this._id = ClientConnection.LAST_CONNECTION_ID++;
         this._connection = connection;
         this._handler_id = null;
-        this._closed = false;
     }
 
     get id() { return this._id; }
 
-    get writable() { return this._connection.writable; }
+    get writable() { return this._connection.writable.locked; }
 
     get address() { return (this._connection.localAddr as Deno.NetAddr); }
 
@@ -25,11 +23,7 @@ export default class ClientConnection {
         if (this._handler_id != null)
             clearInterval(this._handler_id);
         this._connection.close();
-        this._closed = true;
-    }
-
-    isOpen() {
-        return this._closed;
+        this._id = -1;
     }
 
     setHandler(handler_id: number) {
@@ -38,19 +32,15 @@ export default class ClientConnection {
         this._handler_id = handler_id;
     }
 
-    async read() {
-        // if (!this.isOpen())
-        //     throw new Error("Connection is closed.");
-        const array = new Uint8Array(ByteUtil.MAX_BYTES_ALLOWED);
+    async read(read_bytes_count: number = ByteUtil.MAX_BYTES_ALLOWED) {
+        if (read_bytes_count <= 0) 
+            return new Uint8Array;
+        const array = new Uint8Array(read_bytes_count);
         const byte_count = await this._connection.read(array) as number;
         return array.slice(0, byte_count);
     }
 
     async write(bytes: Uint8Array) {
-        // if (!this.isOpen())
-        //     throw new Error("Connection is closed.");
-        if (!this.writable)
-            throw new Error("Client is not writable.");
         await this._connection.write(bytes);
     }
 }

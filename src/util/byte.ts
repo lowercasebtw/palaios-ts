@@ -54,6 +54,8 @@ export class ByteWriter {
         this._bytes = [];
     }
 
+    get length() { return this._bytes.length; }
+    
     *[Symbol.iterator]() {
         for (let i = 0; i < this._bytes.length; ++i)
             yield this._bytes[i];
@@ -67,7 +69,7 @@ export class ByteWriter {
     write(type: Type, value: boolean | number | bigint | string) {
         switch (type) {
             case Type.BOOLEAN: {
-                this._bytes.push((value as boolean) == false ? 0 : 1);
+                this._bytes.push((value as boolean) === false ? 0 : 1);
             } break;
 
             case Type.INT: {
@@ -118,7 +120,7 @@ export class ByteWriter {
             case Type.VAR_INT:
             case Type.VAR_LONG: {
                 while (true) {
-                    if (((value as number) & ~SEGMENT_BITS) == 0) {
+                    if (((value as number) & ~SEGMENT_BITS) === 0) {
                         this.write(Type.BYTE, value);
                         return;
                     }
@@ -133,12 +135,6 @@ export class ByteWriter {
 
     build() {
         return new Uint8Array(this._bytes);
-    }
-
-    async push(conn: ClientConnection) {
-        if (!conn.writable)
-            return;
-        return await conn.write(this.build());
     }
 }
 
@@ -159,47 +155,50 @@ export class ByteReader {
     read(type: Type): boolean | number | bigint | string {
         switch (type) {
             case Type.BOOLEAN: {
-                return this.read(Type.BYTE) == 0 ? false : true;
+                return this.read(Type.BYTE) === 0 ? false : true;
             }
 
             case Type.INT: {
-                const bytes = this.readBytes(4);
-                if (bytes == null)
+                const bytes = this.read_bytes(4);
+                if (bytes === null)
                     throw new Error("Tried reading integer, found null");
                 return Buffer.from(bytes).readInt32BE();
             }
 
             case Type.FLOAT: {
-                const bytes = this.readBytes(4);
-                if (bytes == null)
+                const bytes = this.read_bytes(4);
+                if (bytes === null)
                     throw new Error("Tried reading float, found null");
                 return Buffer.from(bytes).readFloatBE();
             }
 
             case Type.DOUBLE: {
-                const bytes = this.readBytes(8);
-                if (bytes == null)
+                const bytes = this.read_bytes(8);
+                if (bytes === null)
                     throw new Error("Tried reading double, found null");
                 return Buffer.from(bytes).readDoubleBE();
             }
 
             case Type.LONG: {
-                const bytes = this.readBytes(8);
-                if (bytes == null)
+                const bytes = this.read_bytes(8);
+                if (bytes === null)
                     throw new Error("Tried reading long, found null");
                 return Buffer.from(bytes).readBigInt64BE(); // longs are bing int 64
             }
 
             case Type.SHORT: {
-                const bytes = this.readBytes(2);
-                if (bytes == null)
+                const bytes = this.read_bytes(2);
+                if (bytes === null)
                     throw new Error("Tried reading short, found null");
                 return Buffer.from(bytes).readInt16BE();
             }
 
             case Type.STRING: {
-                const length = this.read(Type.SHORT) as number;
-                return un_spaceify(String.fromCharCode(...this.readBytes(length)!));
+                const length = this.read(Type.SHORT) as number * 2; // WHY DOES IT WORK IF WE MULTIPLY BY 2???
+                if (length === 0)
+                    return "";
+                const bytes = this.read_bytes(length)!;
+                return un_spaceify(String.fromCharCode(...bytes));
             }
 
             case Type.BYTE:
@@ -215,7 +214,7 @@ export class ByteReader {
                 while (true) {
                     currentByte = this.read(Type.BYTE) as number;
                     value |= (currentByte & SEGMENT_BITS) << position;
-                    if ((currentByte & CONTINUE_BIT) == 0)
+                    if ((currentByte & CONTINUE_BIT) === 0)
                         break;
                     position += 7;
                     if (position >= 32)
@@ -230,10 +229,11 @@ export class ByteReader {
         }
     }
 
-    readBytes(count: number): Uint8Array | null {
+    read_bytes(count: number): Uint8Array | null {
         if (this.length - this.cursor <= 0)
             return null;
+        const bytes = this._bytes.slice(this._cursor, this._cursor + count);
         this._cursor += count;
-        return this._bytes.slice(this._cursor - count, this._cursor);
+        return bytes;
     }
 }

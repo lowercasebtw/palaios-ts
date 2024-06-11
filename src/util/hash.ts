@@ -7,7 +7,7 @@ export function generateHash() {
 
 export function generateStringHash(str: string) {
     let hash = 0;
-    if (str.length == 0) 
+    if (str.length === 0) 
         return hash;
     let char;
     for (let i = 0; i < str.length; i++) {

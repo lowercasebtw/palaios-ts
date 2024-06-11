@@ -9,17 +9,11 @@ export function un_spaceify(str: string) {
 
 export async function fetchUUID(username: string): Promise<string | null> {
     username = un_spaceify(username);
-    const response = await fetch(`https://api.mojang.com/users/profiles/minecraft/${username}`);
-    if (response.status == 200) {
-        try {
-            const data: APIUser = await response.json();
-            if ('id' in data)
-                return data.id;
-        } catch(e) {
-            // do nothing
-        }
-    }
-    return null;
+    const response = await fetch(`https://api.minecraftservices.com/minecraft/profile/lookup/name/${username}`);
+    if (response.status != 200) 
+        return null;
+    const data: APIUser = await response.json();
+    return data.id ?? null;
 }
 
 export function as_hex(bytes: number[]) {

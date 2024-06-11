@@ -8,8 +8,7 @@ export enum Level {
 export const Logger = new (class Logger {
     private getPrefix(level: Level) {
         const date: Date = new Date;
-        const seconds = date.getSeconds();
-        return `${date.getHours()}:${date.getMinutes()}:${seconds < 10 ? `${seconds}0` : seconds} [${level}] `;
+        return `${date.getHours().toString().padEnd(2, '0')}:${date.getMinutes().toString().padEnd(2, '0')}:${date.getSeconds().toString().padEnd(2, '0')} [${level}] `;
     }
 
     log(level: Level, message: any, ...args: any[]) {
@@ -62,7 +61,7 @@ export const Logger = new (class Logger {
             default: throw new Error(this.getPrefix(level) + "Unknown type to log");
         }
 
-        if (level == Level.FATAL)
+        if (level === Level.FATAL)
             throw new Error("The server encountered a fatal error, causing it to crash. Please restart.");
     }
 })();

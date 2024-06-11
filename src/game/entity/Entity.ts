@@ -23,7 +23,7 @@ export class Entity {
         this._health = 20;
     }
 
-    getId() { return this._id; }
+    getEntityID() { return this._id; }
 
     getType() { return this._type; }
 

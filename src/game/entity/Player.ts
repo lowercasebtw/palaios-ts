@@ -1,12 +1,15 @@
+import { server } from "../../index.ts";
+import { Level, Logger } from "../../logger/Logger.ts";
+import { PacketType } from "../../packet.ts";
+import { ByteWriter, Type } from "../../util/byte.ts";
 import { Gamemode } from "../../util/types.ts";
 import { Entity } from "./Entity.ts";
 import { EntityType } from "./EntityType.ts";
 
 export class Player extends Entity {
-    private _connection_id: number;
-    
     // TODO: UUID class, because uuid is actually numbers
     private _uuid: string;
+    private _display_name: string;
     private _gamemode: Gamemode;
     private _on_ground: boolean;
 
@@ -16,10 +19,10 @@ export class Player extends Entity {
     private _experience_level: number;
     private _experience_points: number;
 
-    public constructor(_connection_id: number, uuid: string) {
+    public constructor(username: string, uuid: string) {
         super(EntityType.PLAYER);
-        this._connection_id = _connection_id;
         this._uuid = uuid;
+        this._display_name = username;
         this._gamemode = Gamemode.CREATIVE;
         this._on_ground = true;
         this._hunger_bars = 20;
@@ -28,9 +31,9 @@ export class Player extends Entity {
         this._experience_points = 0;
     }
 
-    getConnectionID() { return this._connection_id; }
-
     getUUID() { return this._uuid; }
+
+    getDisplayName() { return this._display_name; }
 
     getGamemode() { return this._gamemode; }
 
@@ -45,4 +48,12 @@ export class Player extends Entity {
     getExperienceLevel() { return this._experience_level; }
     
     getExperiencePoints() { return this._experience_points; }
+
+    async sendMessage(message: string) {
+        const writer = new ByteWriter();
+        writer.write(Type.SHORT, PacketType.CHAT_MESSAGE);
+        writer.write(Type.STRING, message);
+        const client = server.getClientForPlayer(this)!;
+        await client.write(writer.build());
+    }
 }
