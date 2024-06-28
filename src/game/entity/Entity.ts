@@ -1,5 +1,4 @@
-import { Vec3d } from "../../util/mth.ts";
-import { Location } from "../../util/mth.ts";
+import { Location, Vec3d } from "../../util/mth.ts";
 import { DimensionType } from "../../util/types.ts";
 import ItemStack from "../item/ItemStack.ts";
 import { EntityType } from "./EntityType.ts";

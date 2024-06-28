@@ -1,5 +1,4 @@
 import { server } from "../../index.ts";
-import { Level, Logger } from "../../logger/Logger.ts";
 import { PacketType } from "../../packet.ts";
 import { ByteWriter, Type } from "../../util/byte.ts";
 import { Gamemode } from "../../util/types.ts";
@@ -9,7 +8,7 @@ import { EntityType } from "./EntityType.ts";
 export class Player extends Entity {
     // TODO: UUID class, because uuid is actually numbers
     private _uuid: string;
-    private _display_name: string;
+    private _username: string;
     private _gamemode: Gamemode;
     private _on_ground: boolean;
 
@@ -22,7 +21,7 @@ export class Player extends Entity {
     public constructor(username: string, uuid: string) {
         super(EntityType.PLAYER);
         this._uuid = uuid;
-        this._display_name = username;
+        this._username = username;
         this._gamemode = Gamemode.CREATIVE;
         this._on_ground = true;
         this._hunger_bars = 20;
@@ -33,7 +32,7 @@ export class Player extends Entity {
 
     getUUID() { return this._uuid; }
 
-    getDisplayName() { return this._display_name; }
+    getUsername() { return this._username; }
 
     getGamemode() { return this._gamemode; }
 
@@ -50,10 +49,24 @@ export class Player extends Entity {
     getExperiencePoints() { return this._experience_points; }
 
     async sendMessage(message: string) {
-        const writer = new ByteWriter();
-        writer.write(Type.SHORT, PacketType.CHAT_MESSAGE);
-        writer.write(Type.STRING, message);
         const client = server.getClientForPlayer(this)!;
-        await client.write(writer.build());
+        if (client == null)
+            return;
+        const writer = new ByteWriter();
+        writer.write(Type.BYTE, PacketType.CHAT_MESSAGE);
+        writer.write(Type.STRING, message);
+        await client.write(writer.build()); 
+    }
+
+    async sendHealthUpdate() {
+        const client = server.getClientForPlayer(this)!;
+        if (client == null)
+            return;
+        const writer = new ByteWriter;
+        writer.write(Type.SHORT, PacketType.UPDATE_HEALTH);
+        writer.write(Type.SHORT, this.getHealth());
+        writer.write(Type.SHORT, this.getHungerLevel());
+        writer.write(Type.FLOAT, this.getSaturation());
+        await client.write(writer.build()); 
     }
 }

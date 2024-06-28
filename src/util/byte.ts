@@ -1,6 +1,4 @@
 import { Buffer } from "https://deno.land/std@0.177.0/node/buffer.ts";
-import { un_spaceify } from "./util.ts";
-import ClientConnection from "./connection.ts";
 
 // https://wiki.vg/Data_types
 
@@ -61,54 +59,52 @@ export class ByteWriter {
             yield this._bytes[i];
     }
 
-    append(other: ByteWriter | Uint8Array | number[]) {
+    append(other: ByteWriter | Uint8Array | number[]): ByteWriter {
         this._bytes.push(...other);
         return this;
     }
 
-    write(type: Type, value: boolean | number | bigint | string) {
+    write(type: Type, value: boolean | number | bigint | string): ByteWriter {
         switch (type) {
             case Type.BOOLEAN: {
                 this._bytes.push((value as boolean) === false ? 0 : 1);
             } break;
 
+            case Type.SHORT: {
+                const buf = Buffer.alloc(2);
+                buf.writeInt16BE(value as number);
+                this.append(new Uint8Array(buf.buffer));
+            } break;
+
             case Type.INT: {
                 const buf = Buffer.alloc(4);
                 buf.writeInt32BE(value as number);
-                this._bytes.push(...new Uint8Array(buf.buffer).toReversed());
+                this.append(new Uint8Array(buf.buffer));
             } break;
 
             case Type.FLOAT: {
                 const buf = Buffer.alloc(4);
                 buf.writeFloatBE(value as number);
-                this._bytes.push(...new Uint8Array(buf.buffer).toReversed());
+                this.append(new Uint8Array(buf.buffer));
             } break;
 
             case Type.DOUBLE: {
                 const buf = Buffer.alloc(8);
                 buf.writeDoubleBE(value as number);
-                this._bytes.push(...new Uint8Array(buf.buffer).toReversed());
+                this.append(new Uint8Array(buf.buffer));
             } break;
 
             case Type.LONG: {
                 const buf = Buffer.alloc(8);
                 buf.writeBigInt64BE(value as bigint);
-                this._bytes.push(...new Uint8Array(buf.buffer).toReversed());
-            } break;
-
-            case Type.SHORT: {
-                const buf = Buffer.alloc(2);
-                buf.writeInt16BE(value as number);
-                this._bytes.push(...new Uint8Array(buf.buffer).toReversed());
+                this.append(new Uint8Array(buf.buffer));
             } break;
 
             case Type.STRING: {
                 const message = value as string;
                 this.write(Type.SHORT, message.length);
                 for (let i = 0; i < message.length; ++i) {
-                    this.write(Type.BYTE, message[i].charCodeAt(0));
-                    if (i != message.length - 1)
-                        this.write(Type.BYTE, 0);
+                    this.write(Type.SHORT, message[i].charCodeAt(0));
                 }
             } break;
 
@@ -122,7 +118,7 @@ export class ByteWriter {
                 while (true) {
                     if (((value as number) & ~SEGMENT_BITS) === 0) {
                         this.write(Type.BYTE, value);
-                        return;
+                        return this;
                     }
                     this.write(Type.BYTE, ((value as number) & SEGMENT_BITS) | CONTINUE_BIT);
                     (value as number) >>>= 7;
@@ -131,6 +127,8 @@ export class ByteWriter {
 
             default: throw new Error("unknown type to write");
         }
+
+        return this;
     }
 
     build() {
@@ -155,7 +153,14 @@ export class ByteReader {
     read(type: Type): boolean | number | bigint | string {
         switch (type) {
             case Type.BOOLEAN: {
-                return this.read(Type.BYTE) === 0 ? false : true;
+                return this.read(Type.BYTE) != 0;
+            }
+
+            case Type.SHORT: {
+                const bytes = this.read_bytes(2);
+                if (bytes === null)
+                    throw new Error("Tried reading short, found null");
+                return Buffer.from(bytes).readInt16BE();
             }
 
             case Type.INT: {
@@ -186,19 +191,15 @@ export class ByteReader {
                 return Buffer.from(bytes).readBigInt64BE(); // longs are bing int 64
             }
 
-            case Type.SHORT: {
-                const bytes = this.read_bytes(2);
-                if (bytes === null)
-                    throw new Error("Tried reading short, found null");
-                return Buffer.from(bytes).readInt16BE();
-            }
-
             case Type.STRING: {
-                const length = this.read(Type.SHORT) as number * 2; // WHY DOES IT WORK IF WE MULTIPLY BY 2???
+                const length = this.read(Type.SHORT) as number;
                 if (length === 0)
                     return "";
-                const bytes = this.read_bytes(length)!;
-                return un_spaceify(String.fromCharCode(...bytes));
+                let string = "";
+                for (let i = 0; i < length; ++i) {
+                    string += String.fromCharCode(this.read(Type.SHORT) as number);
+                }
+                return string;
             }
 
             case Type.BYTE:
@@ -230,7 +231,7 @@ export class ByteReader {
     }
 
     read_bytes(count: number): Uint8Array | null {
-        if (this.length - this.cursor <= 0)
+        if (this._cursor + count > this._bytes.length)
             return null;
         const bytes = this._bytes.slice(this._cursor, this._cursor + count);
         this._cursor += count;

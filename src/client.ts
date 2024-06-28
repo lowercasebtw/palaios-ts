@@ -1,22 +1,20 @@
-import { ByteWriter, Type } from "./util/byte.ts";
-import { PacketType } from "./packet.ts";
 import { Level, Logger } from "./logger/Logger.ts";
+import { PacketType } from "./packet.ts";
+import { ByteWriter, Type } from "./util/byte.ts";
 
-const server = await Deno.connect({
-    port: 25565
-});
+const server = await Deno.connect({ port: 25565 });
 
 const sleep = (ms: number) => new Promise(res => setTimeout(res, ms));
 
 // handshake
 {
     Logger.log(Level.INFO, '(handshake) client -> server')
-    const handshake_str = "nomuea;localhost:25565";
-    const writer = new ByteWriter();
-    writer.write(Type.BYTE, PacketType.HANDSHAKE);
-    writer.write(Type.BYTE, handshake_str.length);
-    writer.write(Type.STRING, handshake_str);
-    await writer.push(server);
+    const handshake_str = "lowerdeez;localhost:25565";
+    await server.write(new ByteWriter()
+                            .write(Type.BYTE, PacketType.HANDSHAKE)
+                            .write(Type.BYTE, handshake_str.length)
+                            .write(Type.STRING, handshake_str)
+                            .build());
 }
 
 Logger.log(Level.INFO, '(handshake) server -> client')
@@ -33,26 +31,24 @@ Logger.log(Level.INFO, '(login req) client -> server')
 // java.io.IOException: Received string length longer than maximum allowed (110 > 16)
 //         at lx.a(SourceFile:197)
 {
-    const writer = new ByteWriter();
-    writer.write(Type.BYTE, PacketType.LOGIN_REQUEST);
-    writer.write(Type.BYTE, 29);
-    writer.write(Type.BYTE, username.length);
-    writer.write(Type.STRING, username);
-    await writer.push(server);
+    await server.write(new ByteWriter()
+                        .write(Type.BYTE, PacketType.LOGIN_REQUEST)
+                        .write(Type.BYTE, 29)
+                        .write(Type.BYTE, username.length)
+                        .write(Type.STRING, username)
+                        .build());
 }
 
 // await sleep(3 * 1000);
 
 // Message
-// Logger.log(Level.INFO, '(message) client -> server')
-// const message = "b";
-// await server.write(new Uint8Array([
-//     0x03, 0x00,
-//     message.length,
-//     ...zeros_string_bytes(message)
-// ]));
-
+Logger.log(Level.INFO, '(message) client -> server')
 while (true) {
     await sleep(1 * 1000)
-    server.write(new Uint8Array([0x00, Math.floor(Math.random() * 10000)]));
+    await server.write(
+        new ByteWriter()
+            .write(Type.BYTE, PacketType.KEEP_ALIVE)
+            .write(Type.INT, Math.floor(Math.random() * 10000))
+            .build()
+    );
 }

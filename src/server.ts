@@ -1,16 +1,16 @@
+import * as pako from "https://deno.land/x/pako@v2.0.3/pako.js";
 import { Client, Packet, Server } from "https://deno.land/x/tcp_socket@0.0.1/mods.ts";
-
-import { Entity } from "./game/entity/Entity.ts";
-import { Player } from "./game/entity/Player.ts";
-import { Difficulty, DimensionType, ServerProperties, WorldType } from "./util/types.ts";
 import World from "./game/dimension/World.ts";
+import { Entity } from "./game/entity/Entity.ts";
+import { EntityType } from "./game/entity/EntityType.ts";
+import { Player } from "./game/entity/Player.ts";
 import { Level, Logger } from "./logger/Logger.ts";
-import { ByteReader, ByteWriter, Type } from "./util/byte.ts";
 import { PacketType, ProtocolVersion, handshake_packet, kick_packet, login_request_packet } from "./packet.ts";
-import { fetchUUID } from "./util/util.ts";
+import { ByteReader, ByteWriter, Type } from "./util/byte.ts";
 import { colorMessage, stripColor } from "./util/color.ts";
 import { Location, Vec3d } from "./util/mth.ts";
-import { EntityType } from "./game/entity/EntityType.ts";
+import { Difficulty, DimensionType, ServerProperties, WorldType } from "./util/types.ts";
+import { fetchUUID } from "./util/util.ts";
 
 export default class MinecraftServer {
     private _server!: Server;
@@ -27,6 +27,9 @@ export default class MinecraftServer {
     private _the_end: World;
 
     private _properties: ServerProperties;
+
+    private ticks_per_second = 20;
+    private tick_interval!: number;
 
     constructor(address: string | null = null, port: number | null = null) {
         // Could be wrong implementation
@@ -45,6 +48,8 @@ export default class MinecraftServer {
             this._properties.address = address;
         if (port != null)
             this._properties.port = port;
+
+        this.tick_interval = setInterval(this.tick.bind(this), 1000 / this.ticks_per_second);
     }
 
     private load_properties(): ServerProperties {
@@ -107,6 +112,13 @@ export default class MinecraftServer {
         const reader = new ByteReader(packet.data);
         const packet_id = reader.read(Type.BYTE) as number;
         switch (packet_id) {
+            case PacketType.KEEP_ALIVE: {
+                const writer = new ByteWriter;
+                writer.write(Type.BYTE, PacketType.KEEP_ALIVE);
+                writer.write(Type.INT, reader.read(Type.INT) as number);
+                await client.write(writer.build());
+            } break;
+
             case PacketType.LOGIN_REQUEST: {
                 if (this.getOnlinePlayerCount() >= this.getMaxPlayerCount()) {
                     await kick_packet(client, "The server is full!");
@@ -134,8 +146,10 @@ export default class MinecraftServer {
 
                 this.broadcast(colorMessage(`&e${username} has joined`));
                 await login_request_packet(client, this, player);
-
                 this._online_player_count++;
+
+                await this.sendPlayerPosition(client, player);
+                await this.sendChunks(client, player);
             } break;
 
             case PacketType.HANDSHAKE: {
@@ -151,11 +165,11 @@ export default class MinecraftServer {
 
                 if (message.startsWith('/')) {
                     Logger.log(Level.INFO, "TODO: Commands");
-                    sender.sendMessage("TODO: Commands");
+                    await sender.sendMessage("TODO: Commands");
                     return;
                 }
 
-                this.broadcast(`<${sender.getDisplayName()}> ${message}`);
+                await this.broadcast(`<${sender.getUsername()}> ${message}`);
             } break; 
 
             case PacketType.PLAYER: {
@@ -239,7 +253,7 @@ export default class MinecraftServer {
 
                 // TODO: figure out weirdness
                 const writer = new ByteWriter();
-                writer.write(Type.SHORT, PacketType.PLAYER_POSITION_LOOK);
+                writer.write(Type.BYTE, PacketType.PLAYER_POSITION_LOOK);
                 writer.write(Type.DOUBLE, x);
                 writer.write(Type.DOUBLE, stance);
                 writer.write(Type.DOUBLE, y);
@@ -264,9 +278,10 @@ export default class MinecraftServer {
 
             case PacketType.DISCONNECT_KICK: {
                 const player = this.getPlayerForClient(client);
-                if (player !== null) 
-                    this.broadcast(colorMessage(`&e${player.getDisplayName()} left`));
-
+                if (player !== null) {
+                    this.broadcast(colorMessage(`&e${player.getUsername()} left`));
+                    this._players.delete(client);
+                }
                 this._online_player_count--;
             } break;
 
@@ -329,9 +344,53 @@ export default class MinecraftServer {
         return client! ?? null;
     }
 
-    broadcast(message: string) {
-        for (const player of this._players.values())
-            player.sendMessage(message);
+    async broadcast(message: string) {
+        for (const player of this._players.values()) {
+            await player.sendMessage(message);
+        }
         Logger.log(Level.INFO, stripColor(message));
+    }
+
+    async sendPlayerPosition(client: Client, player: Player) {
+        const writer = new ByteWriter;
+        writer.write(Type.BYTE, PacketType.PLAYER_POSITION);
+        const position = player.getLocation().getPosition();
+        writer.write(Type.DOUBLE, position.x);
+        writer.write(Type.DOUBLE, position.y);
+        writer.write(Type.DOUBLE, 0);
+        writer.write(Type.DOUBLE, position.z);
+        await client.write(writer.build());
+    }
+
+    async sendChunks(client: Client, player: Player) {
+        const writer = new ByteWriter;
+        writer.write(Type.BYTE, PacketType.CHUNK_DATA);
+
+        const worldHeight = 5;
+
+        writer.write(Type.INT, 0);                 // x
+        writer.write(Type.INT, 0);                 // z 
+        writer.write(Type.BOOLEAN, false);         // ?
+        writer.write(Type.SHORT, 0);               // minY 
+        writer.write(Type.SHORT, worldHeight);     // maxY
+        
+        const chunkData = [];
+        for (let i = 0; i < worldHeight; ++i) {
+            chunkData.push(0);
+            chunkData.push(0);
+            chunkData.push(0);
+        }
+        writer.write(Type.INT, chunkData.length);   // chunkSize
+
+        writer.write(Type.INT, 0);                  // unused
+        writer.append(pako.deflate(new Uint8Array(chunkData)) as Uint8Array);
+        await client.write(writer.build());
+    }
+
+    async tick() {
+        for await (const player of this._players.values()) {            
+            await player.sendHealthUpdate();
+            // TODO: tick time, etc
+        }
     }
 }
