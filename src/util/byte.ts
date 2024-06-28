@@ -30,11 +30,11 @@ export class ByteUtil {
 
 export enum Type {
     BOOLEAN,
-    INT,
+    SHORT,
+    INTEGER,
     FLOAT,
     DOUBLE,
     LONG,
-    SHORT,
     STRING,
     BYTE,
     UNSIGNED_BYTE,
@@ -46,6 +46,77 @@ export enum Type {
 const SEGMENT_BITS = 0x7F;
 const CONTINUE_BIT = 0x80;
 
+export class ByteReader {
+    private _bytes: number[];
+    private _cursor: number;
+    public constructor(bytes: number[] | Uint8Array) {
+        this._bytes = (bytes instanceof Uint8Array ? [...bytes] : bytes);
+        this._cursor = 0;
+    }
+
+    get cursor() { return this._cursor; }
+
+    at_end() { return this._cursor >= this._bytes.length; }
+
+    read(type: Type): boolean | number | bigint | string {
+        switch (type) {
+            case Type.BOOLEAN: {
+                return this.read(Type.BYTE) != 0;
+            }
+
+            case Type.SHORT: return Buffer.from(this.read_bytes(2)).readInt16BE();
+            case Type.INTEGER: return Buffer.from(this.read_bytes(4)).readInt32BE();
+            case Type.FLOAT: return Buffer.from(this.read_bytes(4)).readFloatBE();
+            case Type.DOUBLE: return Buffer.from(this.read_bytes(8)).readDoubleBE();
+            case Type.LONG: return Buffer.from(this.read_bytes(8)).readBigInt64BE(); // longs are bing int 64
+
+            case Type.STRING: {
+                const length = this.read(Type.SHORT) as number;
+                if (length === 0)
+                    return "";
+                let string = "";
+                for (let i = 0; i < length; ++i)
+                    string += String.fromCharCode(this.read(Type.SHORT) as number);
+                return string;
+            }
+
+            case Type.BYTE:
+            case Type.UNSIGNED_BYTE: {
+                return this.read_bytes(1)[0];
+            }
+
+            case Type.VAR_INT:
+            case Type.VAR_LONG: {
+                let value = 0;
+                let position = 0;
+                let currentByte: number;
+                while (true) {
+                    currentByte = this.read(Type.BYTE) as number;
+                    value |= (currentByte & SEGMENT_BITS) << position;
+                    if ((currentByte & CONTINUE_BIT) === 0)
+                        break;
+                    position += 7;
+                    if (position >= 32)
+                        throw new Error("VarInt is too big");
+                }
+                return value;
+            }
+
+            default: {
+                throw new Error("Failed to read. Unknown type: " + type);
+            }
+        }
+    }
+
+    read_bytes(size: number) {
+        if (this._cursor + size > this._bytes.length)
+            throw new Error("Index out of bounds");
+        const bytes = this._bytes.slice(this._cursor, this._cursor + size);
+        this._cursor += size;
+        return bytes;
+    }
+}
+
 export class ByteWriter {
     private _bytes: number[];
     public constructor() {
@@ -54,13 +125,8 @@ export class ByteWriter {
 
     get length() { return this._bytes.length; }
     
-    *[Symbol.iterator]() {
-        for (let i = 0; i < this._bytes.length; ++i)
-            yield this._bytes[i];
-    }
-
     append(other: ByteWriter | Uint8Array | number[]): ByteWriter {
-        this._bytes.push(...other);
+        this._bytes.push(...(other instanceof ByteWriter ? other.build() : other));
         return this;
     }
 
@@ -71,33 +137,33 @@ export class ByteWriter {
             } break;
 
             case Type.SHORT: {
-                const buf = Buffer.alloc(2);
-                buf.writeInt16BE(value as number);
-                this.append(new Uint8Array(buf.buffer));
+                const buffer = Buffer.alloc(2);
+                buffer.writeInt16BE(value as number);
+                this.append(new Uint8Array(buffer));
             } break;
 
-            case Type.INT: {
-                const buf = Buffer.alloc(4);
-                buf.writeInt32BE(value as number);
-                this.append(new Uint8Array(buf.buffer));
+            case Type.INTEGER: {
+                const buffer = Buffer.alloc(4);
+                buffer.writeInt32BE(value as number);
+                this.append(new Uint8Array(buffer));
             } break;
 
             case Type.FLOAT: {
-                const buf = Buffer.alloc(4);
-                buf.writeFloatBE(value as number);
-                this.append(new Uint8Array(buf.buffer));
+                const buffer = Buffer.alloc(4);
+                buffer.writeFloatBE(value as number);
+                this.append(new Uint8Array(buffer));
             } break;
 
             case Type.DOUBLE: {
-                const buf = Buffer.alloc(8);
-                buf.writeDoubleBE(value as number);
-                this.append(new Uint8Array(buf.buffer));
+                const buffer = Buffer.alloc(8);
+                buffer.writeDoubleBE(value as number);
+                this.append(new Uint8Array(buffer));
             } break;
 
             case Type.LONG: {
-                const buf = Buffer.alloc(8);
-                buf.writeBigInt64BE(value as bigint);
-                this.append(new Uint8Array(buf.buffer));
+                const buffer = Buffer.alloc(8);
+                buffer.writeBigInt64BE(value as bigint);
+                this.append(new Uint8Array(buffer));
             } break;
 
             case Type.STRING: {
@@ -136,105 +202,120 @@ export class ByteWriter {
     }
 }
 
-export class ByteReader {
+// NBT
+export class NBTByteReader {
+    private _bytes: number[];
     private _cursor: number;
-    private _bytes: Uint8Array;
-    public constructor(bytes: Uint8Array) {
+    constructor(bytes: number[] | Uint8Array) {
+        this._bytes = (bytes instanceof Uint8Array ? [...bytes] : bytes);
         this._cursor = 0;
-        this._bytes = bytes;
     }
-
-    at_end() { return this._cursor >= this._bytes.length; }
-
-    get length() { return this._bytes.length; }
 
     get cursor() { return this._cursor; }
 
-    read(type: Type): boolean | number | bigint | string {
+    at_end() { return this._cursor >= this._bytes.length; }
+
+    read(type: Type): number | bigint | string {
         switch (type) {
-            case Type.BOOLEAN: {
-                return this.read(Type.BYTE) != 0;
-            }
-
-            case Type.SHORT: {
-                const bytes = this.read_bytes(2);
-                if (bytes === null)
-                    throw new Error("Tried reading short, found null");
-                return Buffer.from(bytes).readInt16BE();
-            }
-
-            case Type.INT: {
-                const bytes = this.read_bytes(4);
-                if (bytes === null)
-                    throw new Error("Tried reading integer, found null");
-                return Buffer.from(bytes).readInt32BE();
-            }
-
-            case Type.FLOAT: {
-                const bytes = this.read_bytes(4);
-                if (bytes === null)
-                    throw new Error("Tried reading float, found null");
-                return Buffer.from(bytes).readFloatBE();
-            }
-
-            case Type.DOUBLE: {
-                const bytes = this.read_bytes(8);
-                if (bytes === null)
-                    throw new Error("Tried reading double, found null");
-                return Buffer.from(bytes).readDoubleBE();
-            }
-
-            case Type.LONG: {
-                const bytes = this.read_bytes(8);
-                if (bytes === null)
-                    throw new Error("Tried reading long, found null");
-                return Buffer.from(bytes).readBigInt64BE(); // longs are bing int 64
-            }
-
+            case Type.SHORT: return Buffer.from(this.read_bytes(2)).readInt16BE();
+            case Type.INTEGER: return Buffer.from(this.read_bytes(4)).readInt32BE();
+            case Type.FLOAT: return Buffer.from(this.read_bytes(4)).readFloatBE();
+            case Type.DOUBLE: return Buffer.from(this.read_bytes(8)).readDoubleBE();
+            case Type.LONG: return Buffer.from(this.read_bytes(8)).readBigInt64BE(); // longs are bing int 64
+            case Type.BYTE: return this.read_bytes(1)[0];
             case Type.STRING: {
                 const length = this.read(Type.SHORT) as number;
-                if (length === 0)
-                    return "";
-                let string = "";
-                for (let i = 0; i < length; ++i) {
-                    string += String.fromCharCode(this.read(Type.SHORT) as number);
-                }
-                return string;
+                const bytes = this.read_bytes(length);
+                return String.fromCharCode(...bytes);
             }
-
-            case Type.BYTE:
-            case Type.UNSIGNED_BYTE: {
-                return this._bytes[this._cursor++];
+            default: {
+                throw new Error("Failed to read. Unknown type: " + type);
             }
-
-            case Type.VAR_INT:
-            case Type.VAR_LONG: {
-                let value = 0;
-                let position = 0;
-                let currentByte: number;
-                while (true) {
-                    currentByte = this.read(Type.BYTE) as number;
-                    value |= (currentByte & SEGMENT_BITS) << position;
-                    if ((currentByte & CONTINUE_BIT) === 0)
-                        break;
-                    position += 7;
-                    if (position >= 32)
-                        throw new Error("VarInt is too big");
-                }
-                return value;
-                // const bytes = this.read_bytes(8);
-                // return Buffer.from(bytes).readBigInt64BE(); // longs are bing int 64
-            }
-
-            default: throw new Error("unknown type to read");
         }
     }
 
-    read_bytes(count: number): Uint8Array | null {
-        if (this._cursor + count > this._bytes.length)
-            return null;
-        const bytes = this._bytes.slice(this._cursor, this._cursor + count);
-        this._cursor += count;
+    read_bytes(size: number) {
+        if (this._cursor + size > this._bytes.length)
+            throw new Error("Index out of bounds");
+        const bytes = this._bytes.slice(this._cursor, this._cursor + size);
+        this._cursor += size;
         return bytes;
+    }
+}
+
+export class NBTByteWriter {
+    private _bytes: number[];
+    constructor() {
+        this._bytes = [];
+    }
+
+    append(other: Uint8Array | number[]): NBTByteWriter {
+        this._bytes.push(...other);
+        return this;
+    }
+
+    write(type: Type, value: number | bigint | string): NBTByteWriter {
+        switch (type) {
+            case Type.SHORT: {
+                const buffer = Buffer.alloc(2);
+                buffer.writeInt16BE(value as number);
+                this.append(new Uint8Array(buffer));
+                return this;
+            }
+            
+            case Type.INTEGER: {
+                const buffer = Buffer.alloc(4);
+                buffer.writeInt32BE(value as number);
+                this.append(new Uint8Array(buffer));
+                return this;
+            }
+            
+            case Type.FLOAT: {
+                const buffer = Buffer.alloc(4);
+                buffer.writeFloatBE(value as number);
+                this.append(new Uint8Array(buffer));
+                return this;
+            }
+            
+            case Type.DOUBLE: {
+                const buffer = Buffer.alloc(8);
+                buffer.writeDoubleBE(value as number);
+                this.append(new Uint8Array(buffer));
+                return this;
+            }
+            
+            // NOTE: Longs are Big Int 64
+            case Type.LONG: {
+                const buffer = Buffer.alloc(8);
+                buffer.writeBigInt64BE(value as bigint);
+                this.append(new Uint8Array(buffer));
+                return this;
+            }
+
+            case Type.BYTE: {
+                this._bytes.push(value as number);
+                return this;
+            }
+            
+            case Type.STRING: {
+                if (!(typeof value === "string"))
+                    throw new Error("ByteWriter tried to write a string, but got something that wasn't a string.");
+                if (value === null || value.length === 0)
+                    return this; // Skip it
+                this.write(Type.SHORT, value.length);
+                for (const byte of value.split('').map(c => c.charCodeAt(0))) {
+                    this.write(Type.BYTE, byte);
+                }
+                return this;
+            }
+
+            default: {
+                throw new Error("Failed to read. Unknown type: " + type);
+            }
+        }
+    }
+
+    build() {
+        return new Uint8Array(this._bytes);
     }
 }

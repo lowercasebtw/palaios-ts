@@ -48,7 +48,7 @@ while (true) {
     await server.write(
         new ByteWriter()
             .write(Type.BYTE, PacketType.KEEP_ALIVE)
-            .write(Type.INT, Math.floor(Math.random() * 10000))
+            .write(Type.INTEGER, Math.floor(Math.random() * 10000))
             .build()
     );
 }

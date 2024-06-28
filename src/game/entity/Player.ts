@@ -7,7 +7,7 @@ import { EntityType } from "./EntityType.ts";
 
 export class Player extends Entity {
     // TODO: UUID class, because uuid is actually numbers
-    private _uuid: string;
+    private _uuid: string | null;
     private _username: string;
     private _gamemode: Gamemode;
     private _on_ground: boolean;
@@ -18,7 +18,7 @@ export class Player extends Entity {
     private _experience_level: number;
     private _experience_points: number;
 
-    public constructor(username: string, uuid: string) {
+    public constructor(username: string, uuid: string | null) {
         super(EntityType.PLAYER);
         this._uuid = uuid;
         this._username = username;

@@ -1,11 +1,11 @@
 // https://wiki.vg/index.php?title=Protocol&oldid=932
 
 import { Client } from "https://deno.land/x/tcp_socket@0.0.1/mods.ts";
-import { EntityType } from "../src/game/entity/EntityType.ts";
 import { Player } from "../src/game/entity/Player.ts";
 import ItemStack from "../src/game/item/ItemStack.ts";
 import { ByteWriter, Type } from "../src/util/byte.ts";
 import MinecraftServer from "./server.ts";
+import { generateHash } from "./util/hash.ts";
 import { WorldType } from "./util/types.ts";
 
 export enum ProtocolVersion {
@@ -83,28 +83,29 @@ export enum PacketType {
     KICK_DISCONNECT = 255,
 }
 
-export async function login_request_packet(client: Client, server: MinecraftServer, player: Player) {
+export async function sendLoginRequestPacket(client: Client, server: MinecraftServer, player: Player) {
     await client.write(new ByteWriter()
                             .write(Type.BYTE, PacketType.LOGIN_REQUEST)
-                            .write(Type.INT, ProtocolVersion.v1_2_4_to_1_2_5)
+                            .write(Type.INTEGER, ProtocolVersion.v1_2_4_to_1_2_5)
                             .write(Type.STRING, player.getUsername())
                             .write(Type.STRING, WorldType.DEFAULT)
-                            .write(Type.INT, player.getGamemode())
-                            .write(Type.INT, server.getDifficulty())    
+                            .write(Type.INTEGER, player.getGamemode())
+                            .write(Type.INTEGER, server.getDifficulty())    
                             .write(Type.BYTE, server.getDifficulty())
                             .write(Type.BYTE, 128)
                             .write(Type.BYTE, 1)
                             .build());
 }
 
-export async function handshake_packet(client: Client, hash: string) {
-    await client.write(new ByteWriter()
-                            .write(Type.BYTE, PacketType.HANDSHAKE)
-                            .write(Type.STRING, hash)
-                            .build());
+export async function sendHandshakePacket(client: Client, isOnlineMode: boolean) {
+    const writer = new ByteWriter();
+    writer.write(Type.BYTE, PacketType.HANDSHAKE);
+    // TODO: Fix The Hash
+    writer.write(Type.STRING, isOnlineMode ? generateHash() : "-");
+    await client.write(writer.build());
 }
 
-export async function set_window_items_packet(client: Client, window_id: number, items: ItemStack[]) {
+export async function sendWindowItemsPacket(client: Client, window_id: number, items: ItemStack[]) {
     if (items.length < 44)
         return; // invalid
     const writer = new ByteWriter();

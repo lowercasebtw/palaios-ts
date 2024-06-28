@@ -1,5 +1,5 @@
 import * as pako from "https://deno.land/x/pako@v2.0.3/pako.js";
-import { ByteReader, ByteWriter } from "./nbt_byte.ts";
+import { NBTByteReader, NBTByteWriter, Type } from "../util/byte.ts";
 
 export enum NBT_Type {
 	END,
@@ -15,13 +15,13 @@ export enum NBT_Type {
 	COMPOUND
 }
 
-function read_name(reader: ByteReader, should_read_name: boolean) {
-	return !should_read_name ? null : reader.read_string();
+function read_name(reader: NBTByteReader, should_read_name: boolean) {
+	return !should_read_name ? null : reader.read(Type.STRING) as string;
 }
 
 export abstract class NBT_Tag {
 	public constructor(public name: string | null = null) {}
-	static from_reader(reader: ByteReader, should_read_name: boolean): NBT_Tag {
+	static from_reader(reader: NBTByteReader, should_read_name: boolean): NBT_Tag {
 		throw new Error("TODO: Implement from_reader for this tag");
 	}
 	abstract to_bytes(): Uint8Array;
@@ -32,14 +32,14 @@ export class NBT_End extends NBT_Tag {
 		super();
 	}
 
-	static from_reader(reader: ByteReader, should_read_name: boolean) {
+	static from_reader(reader: NBTByteReader, should_read_name: boolean) {
 		const name = read_name(reader, should_read_name);
 		return new NBT_End(name!);
 	}
 
 	override to_bytes(): Uint8Array {
-		return new ByteWriter()
-				.write_byte(NBT_Type.END)
+		return new NBTByteWriter()
+				.write(Type.BYTE, NBT_Type.END)
 				.build();
 	}
 }
@@ -49,17 +49,17 @@ export class NBT_Byte extends NBT_Tag {
 		super();
 	}
 
-	static from_reader(reader: ByteReader, should_read_name: boolean) {
+	static from_reader(reader: NBTByteReader, should_read_name: boolean) {
 		const name = read_name(reader, should_read_name);
-		const byte = new NBT_Byte(name, reader.read_byte());
+		const byte = new NBT_Byte(name, reader.read(Type.BYTE) as number);
 		return byte;
 	}
 
 	override to_bytes(): Uint8Array {
-		return new ByteWriter()
-					.write_byte(NBT_Type.BYTE)
-					.write_string(this.name)
-					.write_byte(this.value)
+		return new NBTByteWriter()
+					.write(Type.BYTE, NBT_Type.BYTE)
+					.write(Type.STRING, this.name!)
+					.write(Type.BYTE, this.value)
 					.build();
 	}
 }
@@ -69,16 +69,16 @@ export class NBT_Short extends NBT_Tag {
 		super();
 	}
 
-	static from_reader(reader: ByteReader, should_read_name: boolean) {
+	static from_reader(reader: NBTByteReader, should_read_name: boolean) {
 		const name = read_name(reader, should_read_name);
-		return new NBT_Short(name, reader.read_short());
+		return new NBT_Short(name, reader.read(Type.SHORT) as number);
 	}
 
 	override to_bytes(): Uint8Array {
-		return new ByteWriter()
-					.write_byte(NBT_Type.SHORT)
-					.write_string(this.name)
-					.write_short(this.value)
+		return new NBTByteWriter()
+					.write(Type.BYTE, NBT_Type.SHORT)
+					.write(Type.STRING, this.name!)
+					.write(Type.SHORT, this.value)
 					.build();
 	}
 }
@@ -88,16 +88,16 @@ export class NBT_Integer extends NBT_Tag {
 		super();
 	}
 
-	static from_reader(reader: ByteReader, should_read_name: boolean) {
+	static from_reader(reader: NBTByteReader, should_read_name: boolean) {
 		const name = read_name(reader, should_read_name);
-		return new NBT_Integer(name, reader.read_integer());
+		return new NBT_Integer(name, reader.read(Type.INTEGER) as number);
 	}
 
 	override to_bytes(): Uint8Array {
-		return new ByteWriter()
-					.write_byte(NBT_Type.INTEGER)
-					.write_string(this.name)
-					.write_integer(this.value)
+		return new NBTByteWriter()
+					.write(Type.BYTE, NBT_Type.INTEGER)
+					.write(Type.STRING, this.name!)
+					.write(Type.INTEGER, this.value)
 					.build();
 	}
 }
@@ -107,16 +107,16 @@ export class NBT_Long extends NBT_Tag {
 		super();
 	}
 
-	static from_reader(reader: ByteReader, should_read_name: boolean) {
+	static from_reader(reader: NBTByteReader, should_read_name: boolean) {
 		const name = read_name(reader, should_read_name);
-		return new NBT_Long(name, reader.read_long());
+		return new NBT_Long(name, reader.read(Type.LONG) as bigint);
 	}
 
 	override to_bytes(): Uint8Array {
-		return new ByteWriter()
-					.write_byte(NBT_Type.LONG)
-					.write_string(this.name)
-					.write_long(this.value)
+		return new NBTByteWriter()
+					.write(Type.BYTE, NBT_Type.LONG)
+					.write(Type.STRING, this.name!)
+					.write(Type.LONG, this.value)
 					.build();
 	}
 }
@@ -126,16 +126,16 @@ export class NBT_Float extends NBT_Tag {
 		super();
 	}
 
-	static from_reader(reader: ByteReader, should_read_name: boolean) {
+	static from_reader(reader: NBTByteReader, should_read_name: boolean) {
 		const name = read_name(reader, should_read_name);
-		return new NBT_Float(name, reader.read_float());
+		return new NBT_Float(name, reader.read(Type.FLOAT) as number);
 	}
 
 	override to_bytes(): Uint8Array {
-		return new ByteWriter()
-					.write_byte(NBT_Type.FLOAT)
-					.write_string(this.name)
-					.write_float(this.value)
+		return new NBTByteWriter()
+					.write(Type.BYTE, NBT_Type.FLOAT)
+					.write(Type.STRING, this.name!)
+					.write(Type.FLOAT, this.value)
 					.build();
 	}
 }
@@ -145,16 +145,16 @@ export class NBT_Double extends NBT_Tag {
 		super();
 	}
 
-	static from_reader(reader: ByteReader, should_read_name: boolean) {
+	static from_reader(reader: NBTByteReader, should_read_name: boolean) {
 		const name = read_name(reader, should_read_name);
-		return new NBT_Double(name, reader.read_double());
+		return new NBT_Double(name, reader.read(Type.DOUBLE) as number);
 	}
 
 	override to_bytes(): Uint8Array {
-		return new ByteWriter()
-					.write_byte(NBT_Type.DOUBLE)
-					.write_string(this.name)
-					.write_double(this.value)
+		return new NBTByteWriter()
+					.write(Type.BYTE, NBT_Type.DOUBLE)
+					.write(Type.STRING, this.name!)
+					.write(Type.DOUBLE, this.value)
 					.build();
 	}
 }
@@ -164,18 +164,18 @@ export class NBT_Byte_Array extends NBT_Tag {
 		super();
 	}
 
-	static from_reader(reader: ByteReader, should_read_name: boolean) {
+	static from_reader(reader: NBTByteReader, should_read_name: boolean) {
 		const name = read_name(reader, should_read_name);
-		const size = reader.read_integer();
-		const bytes = reader.read(size);
-		return new NBT_Byte_Array(name, size, bytes);
+		const size = reader.read(Type.INTEGER) as number;
+		const bytes = reader.read_bytes(size);
+		return new NBT_Byte_Array(name, size, new Uint8Array(bytes));
 	}
 
 	override to_bytes() {
-		return new ByteWriter()
-					.write_byte(NBT_Type.BYTE_ARRAY)
-					.write_string(this.name)
-					.write_integer(this.size)
+		return new NBTByteWriter()
+					.write(Type.BYTE, NBT_Type.BYTE_ARRAY)
+					.write(Type.STRING, this.name!)
+					.write(Type.INTEGER, this.size)
 					.append(this.bytes)
 					.build();
 	}
@@ -186,16 +186,16 @@ export class NBT_String extends NBT_Tag {
 		super();
 	}
 
-	static from_reader(reader: ByteReader, should_read_name: boolean) {
+	static from_reader(reader: NBTByteReader, should_read_name: boolean) {
 		const name = read_name(reader, should_read_name);
-		return new NBT_String(name, reader.read_string());
+		return new NBT_String(name, reader.read(Type.STRING) as string);
 	}
 
 	override to_bytes(): Uint8Array {
-		return new ByteWriter()
-					.write_byte(NBT_Type.STRING)
-					.write_string(this.name)
-					.write_string(this.value)
+		return new NBTByteWriter()
+					.write(Type.BYTE, NBT_Type.STRING)
+					.write(Type.STRING, this.name!)
+					.write(Type.STRING, this.value)
 					.build();
 	}
 }
@@ -210,10 +210,10 @@ export class NBT_List extends NBT_Tag {
 		super();
 	}
 
-	static from_reader(reader: ByteReader, should_read_name: boolean) {
+	static from_reader(reader: NBTByteReader, should_read_name: boolean) {
 		const name = read_name(reader, should_read_name);
-		const type_id = reader.read_byte();
-		const size = reader.read_integer();
+		const type_id = reader.read(Type.BYTE) as number;
+		const size = reader.read(Type.INTEGER) as number;
 		const tags: NBT_Tag[] = new Array(size).fill(null).map(_ => read_nbt_tag(reader, false, type_id));
 		return new NBT_List(name, type_id, size, tags);
 	}
@@ -222,11 +222,11 @@ export class NBT_List extends NBT_Tag {
 		if (this.size != this.tags.length) {
 			throw new Error("NBT List has inconsistent size than the length of tags it contains.");
 		}
-		const writer = new ByteWriter;
-		writer.write_byte(NBT_Type.LIST);
-		writer.write_string(this.name);
-		writer.write_byte(this.type_id);
-		writer.write_integer(this.size);
+		const writer = new NBTByteWriter;
+		writer.write(Type.BYTE, NBT_Type.LIST);
+		writer.write(Type.STRING, this.name!);
+		writer.write(Type.BYTE, this.type_id);
+		writer.write(Type.INTEGER, this.size);
 		for (const tag of this.tags) {
 			// NOTE: In a list, there is no need for the type id as they should all be the same in a list
 			const bytes = [...tag.to_bytes()];
@@ -249,7 +249,7 @@ export class NBT_Compound extends NBT_Tag {
 		return this.tags.filter((tag) => !(tag instanceof NBT_End)).find((tag: NBT_Tag) => tag.name === name);
 	}
 
-	static from_reader(reader: ByteReader, should_read_name: boolean) {
+	static from_reader(reader: NBTByteReader, should_read_name: boolean) {
 		const name = read_name(reader, should_read_name);
 		const tags: NBT_Tag[] = [];
 		let tag: NBT_Tag;
@@ -263,9 +263,9 @@ export class NBT_Compound extends NBT_Tag {
 	}
 
 	override to_bytes(): Uint8Array {
-		const writer = new ByteWriter;
-		writer.write_byte(NBT_Type.COMPOUND);
-		writer.write_string(this.name);
+		const writer = new NBTByteWriter;
+		writer.write(Type.BYTE, NBT_Type.COMPOUND);
+		writer.write(Type.STRING, this.name!);
 		for (const tag of this.tags) {
 			writer.append(tag.to_bytes());
 		}
@@ -274,8 +274,7 @@ export class NBT_Compound extends NBT_Tag {
 	}
 }
 
-export function read_nbt_tag(reader: ByteReader, should_read_name: boolean = true, type_id: number = reader.read_byte()): NBT_Tag {
-	console.log(type_id)
+export function read_nbt_tag(reader: NBTByteReader, should_read_name: boolean = true, type_id: number = reader.read(Type.BYTE) as number): NBT_Tag {
 	switch (type_id) {
 		case NBT_Type.END: return new NBT_End();
 		case NBT_Type.BYTE: return NBT_Byte.from_reader(reader, should_read_name);
@@ -288,7 +287,7 @@ export function read_nbt_tag(reader: ByteReader, should_read_name: boolean = tru
 		case NBT_Type.STRING: return NBT_String.from_reader(reader, should_read_name);
 		case NBT_Type.LIST: return NBT_List.from_reader(reader, should_read_name);
 		case NBT_Type.COMPOUND: return NBT_Compound.from_reader(reader, should_read_name);
-		default: throw new Error(`Unexpected byte ${type_id} at data index ${reader.cursor}`);
+		default: throw new Error(`Unexpected byte ${type_id} at offset ${reader.cursor}`);
 	}
 }
 
@@ -306,8 +305,9 @@ export function decompress(bytes: Uint8Array): Uint8Array {
 }
 
 export function parse_nbt_file(bytes: Uint8Array | number[]) {
-	const compound = read_nbt_tag(new ByteReader(decompress(bytes instanceof Uint8Array ? bytes : new Uint8Array(bytes))), true);
+	const compound = read_nbt_tag(new NBTByteReader(decompress(bytes instanceof Uint8Array ? bytes : new Uint8Array(bytes))), true);
 	if (!(compound instanceof NBT_Compound)) {
+		console.error("Possible Bedrock Bozo detected!");
 		throw new SyntaxError("NBT expected to start with compound tag but received something else.");
 	}
 	return compound;

@@ -5,7 +5,7 @@ import { Entity } from "./game/entity/Entity.ts";
 import { EntityType } from "./game/entity/EntityType.ts";
 import { Player } from "./game/entity/Player.ts";
 import { Level, Logger } from "./logger/Logger.ts";
-import { PacketType, ProtocolVersion, handshake_packet, kick_packet, login_request_packet } from "./packet.ts";
+import { kick_packet, PacketType, ProtocolVersion, sendHandshakePacket, sendLoginRequestPacket } from "./packet.ts";
 import { ByteReader, ByteWriter, Type } from "./util/byte.ts";
 import { colorMessage, stripColor } from "./util/color.ts";
 import { Location, Vec3d } from "./util/mth.ts";
@@ -119,7 +119,7 @@ export default class MinecraftServer {
             case PacketType.KEEP_ALIVE: {
                 const writer = new ByteWriter;
                 writer.write(Type.BYTE, PacketType.KEEP_ALIVE);
-                writer.write(Type.INT, reader.read(Type.INT) as number);
+                writer.write(Type.INTEGER, reader.read(Type.INTEGER) as number);
                 await client.write(writer.build());
             } break;
 
@@ -130,7 +130,7 @@ export default class MinecraftServer {
                 }
 
                 // Login Request
-                const protocol_id = reader.read(Type.INT) as number;
+                const protocol_id = reader.read(Type.INTEGER) as number;
                 const username = reader.read(Type.STRING) as string;
                 
                 if (protocol_id != ProtocolVersion.v1_2_4_to_1_2_5) {
@@ -139,7 +139,7 @@ export default class MinecraftServer {
                 }    
 
                 const uuid = await fetchUUID(username);
-                if (uuid === null) {
+                if (uuid === null && this.isOnlineMode()) {
                     console.log(`id=${client.conn!.rid}, username='${username}', uuid='${uuid}'`)
                     await kick_packet(client, `Failed to login, invalid uuid.`);
                     return;
@@ -149,7 +149,7 @@ export default class MinecraftServer {
                 this._players.set(client, player);
 
                 this.broadcast(colorMessage(`&e${username} has joined`));
-                await login_request_packet(client, this, player);
+                await sendLoginRequestPacket(client, this, player);
                 this._online_player_count++;
 
                 await this.sendPlayerPosition(client, player);
@@ -158,7 +158,8 @@ export default class MinecraftServer {
 
             case PacketType.HANDSHAKE: {
                 // Handle Client Data
-                await handshake_packet(client, '-');
+                console.log(this.isOnlineMode())
+                await sendHandshakePacket(client, this.isOnlineMode());
             } break;   
 
             case PacketType.CHAT_MESSAGE: {
@@ -300,6 +301,8 @@ export default class MinecraftServer {
 
     getOnlinePlayerCount() { return this._online_player_count; }
 
+    isOnlineMode() { return this._properties.online_mode; }
+
     getMaxPlayerCount() { return this._properties.max_players; }
 
     // horrid
@@ -380,8 +383,8 @@ export default class MinecraftServer {
 
         const worldHeight = 5;
 
-        writer.write(Type.INT, 0);                 // x
-        writer.write(Type.INT, 0);                 // z 
+        writer.write(Type.INTEGER, 0);                 // x
+        writer.write(Type.INTEGER, 0);                 // z 
         writer.write(Type.BOOLEAN, false);         // ?
         writer.write(Type.SHORT, 0);               // minY 
         writer.write(Type.SHORT, worldHeight);     // maxY
@@ -392,9 +395,9 @@ export default class MinecraftServer {
             chunkData.push(0);
             chunkData.push(0);
         }
-        writer.write(Type.INT, chunkData.length);   // chunkSize
+        writer.write(Type.INTEGER, chunkData.length);   // chunkSize
 
-        writer.write(Type.INT, 0);                  // unused
+        writer.write(Type.INTEGER, 0);                  // unused
         writer.append(pako.deflate(new Uint8Array(chunkData)) as Uint8Array);
         // await client.write(writer.build());
     }
@@ -402,7 +405,7 @@ export default class MinecraftServer {
     async sendKeepAlive(client: Client) {
         await client.write(new ByteWriter()
                                 .write(Type.BYTE, PacketType.KEEP_ALIVE)
-                                .write(Type.INT, Math.floor(Math.random() * 10000))
+                                .write(Type.INTEGER, Math.floor(Math.random() * 10000))
                                 .build());
     }
 
