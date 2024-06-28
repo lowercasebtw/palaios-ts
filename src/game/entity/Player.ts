@@ -63,7 +63,7 @@ export class Player extends Entity {
         if (client == null)
             return;
         const writer = new ByteWriter;
-        writer.write(Type.SHORT, PacketType.UPDATE_HEALTH);
+        writer.write(Type.BYTE, PacketType.UPDATE_HEALTH);
         writer.write(Type.SHORT, this.getHealth());
         writer.write(Type.SHORT, this.getHungerLevel());
         writer.write(Type.FLOAT, this.getSaturation());

@@ -26,6 +26,8 @@ export default class MinecraftServer {
     private _nether: World;
     private _the_end: World;
 
+    private _time: number;
+
     private _properties: ServerProperties;
 
     private ticks_per_second = 20;
@@ -41,6 +43,8 @@ export default class MinecraftServer {
         this._overworld = new World("worlds/world", DimensionType.OVERWORLD, WorldType.DEFAULT);
         this._nether = new World("worlds/nether", DimensionType.NETHER, WorldType.DEFAULT);
         this._the_end = new World("worlds/end", DimensionType.THE_END, WorldType.DEFAULT);
+
+        this._time = 0;
 
         // server.properties
         this._properties = this.load_properties();
@@ -172,14 +176,13 @@ export default class MinecraftServer {
                 await this.broadcast(`<${sender.getUsername()}> ${message}`);
             } break; 
 
-            case PacketType.PLAYER: {
+            case PacketType.FLYING: {
                 const on_ground = reader.read(Type.BOOLEAN) as boolean;
                 const player = this.getPlayerForClient(client);
                 if (player === null) {
                     await kick_packet(client, "Player is null");
                     return;
                 }
-
                 player.setOnGround(on_ground);
             } break;    
 
@@ -252,16 +255,16 @@ export default class MinecraftServer {
                 player.setOnGround(on_ground);
 
                 // TODO: figure out weirdness
-                const writer = new ByteWriter();
-                writer.write(Type.BYTE, PacketType.PLAYER_POSITION_LOOK);
-                writer.write(Type.DOUBLE, x);
-                writer.write(Type.DOUBLE, stance);
-                writer.write(Type.DOUBLE, y);
-                writer.write(Type.DOUBLE, z);
-                writer.write(Type.FLOAT, yaw);
-                writer.write(Type.FLOAT, pitch);
-                writer.write(Type.BOOLEAN, on_ground);
-                await client.write(writer.build().slice(0, writer.length - 1)); // why slice??
+                // const writer = new ByteWriter();
+                // writer.write(Type.BYTE, PacketType.PLAYER_POSITION_LOOK);
+                // writer.write(Type.DOUBLE, x);
+                // writer.write(Type.DOUBLE, stance);
+                // writer.write(Type.DOUBLE, y);
+                // writer.write(Type.DOUBLE, z);
+                // writer.write(Type.FLOAT, yaw);
+                // writer.write(Type.FLOAT, pitch);
+                // writer.write(Type.BOOLEAN, on_ground);
+                // await client.write(writer.build().slice(0, writer.length - 1)); // why slice??
             } break;
 
             case PacketType.PLUGIN_MESSAGE: {
@@ -276,7 +279,7 @@ export default class MinecraftServer {
                 await kick_packet(client, `${this._properties.motd}§${this._online_player_count}§${this._properties.max_players}`);
             } break;
 
-            case PacketType.DISCONNECT_KICK: {
+            case PacketType.KICK_DISCONNECT: {
                 const player = this.getPlayerForClient(client);
                 if (player !== null) {
                     this.broadcast(colorMessage(`&e${player.getUsername()} left`));
@@ -286,7 +289,7 @@ export default class MinecraftServer {
             } break;
 
             default: {
-                Logger.log(Level.WARNING, `TODO: Handle packet ${PacketType[packet_id]}`);
+                Logger.log(Level.WARNING, `TODO: Handle packet (${packet_id}) ${PacketType[packet_id]}`);
             } break;
         }
     }
@@ -359,6 +362,7 @@ export default class MinecraftServer {
         writer.write(Type.DOUBLE, position.y);
         writer.write(Type.DOUBLE, 0);
         writer.write(Type.DOUBLE, position.z);
+        writer.write(Type.BYTE, player.isOnGround() == true ? 1 : 0);
         await client.write(writer.build());
     }
 
@@ -384,13 +388,33 @@ export default class MinecraftServer {
 
         writer.write(Type.INT, 0);                  // unused
         writer.append(pako.deflate(new Uint8Array(chunkData)) as Uint8Array);
-        await client.write(writer.build());
+        // await client.write(writer.build());
+    }
+
+    async sendKeepAlive(client: Client) {
+        await client.write(new ByteWriter()
+                                .write(Type.BYTE, PacketType.KEEP_ALIVE)
+                                .write(Type.INT, Math.floor(Math.random() * 10000))
+                                .build());
+    }
+
+    async sendTimeUpdate(client: Client) {
+        this._time = Date.now();
+        // LOL ^
+        await client.write(new ByteWriter()
+                                .write(Type.BYTE, PacketType.UPDATE_TIME)
+                                .write(Type.LONG, BigInt(this._time))
+                                .build());
     }
 
     async tick() {
         for await (const player of this._players.values()) {            
             await player.sendHealthUpdate();
-            // TODO: tick time, etc
+            const client = this.getClientForPlayer(player);
+            if (client !== null) {
+                await this.sendKeepAlive(client);
+            }
+            await this.sendTimeUpdate(client);
         }
     }
 }
