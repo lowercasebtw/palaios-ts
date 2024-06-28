@@ -105,9 +105,9 @@ export default class MinecraftServer {
             const addr = server.addr as Deno.NetAddr;
             Logger.log(Level.INFO, `Listening on ${addr.hostname}:${addr.port}`);
         });
-        this._server.on("connect", (client: Client) => {});
+        this._server.on("connect", () => {});
         this._server.on("receive", this.handle_packet.bind(this));
-        this._server.on("close", (client: Client) => {});
+        this._server.on("close", () => {});
         await this._server.listen();
     }
 
@@ -347,6 +347,14 @@ export default class MinecraftServer {
         return client! ?? null;
     }
 
+    isDay() {
+        return false;
+    }
+
+    isNight() {
+        return false;
+    }
+
     async broadcast(message: string) {
         for (const player of this._players.values()) {
             await player.sendMessage(message);
@@ -399,7 +407,8 @@ export default class MinecraftServer {
     }
 
     async sendTimeUpdate(client: Client) {
-        this._time = Date.now();
+        // Time in Ticks elapsed since world creation
+        this._time = Math.floor(Date.now() / 20); // hardcoded as vanilla ticks
         // LOL ^
         await client.write(new ByteWriter()
                                 .write(Type.BYTE, PacketType.UPDATE_TIME)
@@ -408,13 +417,14 @@ export default class MinecraftServer {
     }
 
     async tick() {
-        for await (const player of this._players.values()) {            
-            await player.sendHealthUpdate();
+        for await (const player of this._players.values()) {         
             const client = this.getClientForPlayer(player);
             if (client !== null) {
                 await this.sendKeepAlive(client);
+                await this.sendTimeUpdate(client);
+                await player.sendHealthUpdate();
+                // TODO: other stuff, like entity tick, tile tick, etc
             }
-            await this.sendTimeUpdate(client);
         }
     }
-}
+}   
