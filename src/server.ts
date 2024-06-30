@@ -124,6 +124,8 @@ export default class MinecraftServer {
             } break;
 
             case PacketType.LOGIN_REQUEST: {
+                console.log(packet.data);
+
                 if (this.getOnlinePlayerCount() >= this.getMaxPlayerCount()) {
                     await kick_packet(client, "The server is full!");
                     return;
@@ -153,7 +155,7 @@ export default class MinecraftServer {
                 this._online_player_count++;
 
                 await this.sendPlayerPosition(client, player);
-                await this.sendChunks(client, player);
+                await this.sendChunks(client);
             } break;
 
             case PacketType.HANDSHAKE: {
@@ -169,8 +171,17 @@ export default class MinecraftServer {
                     return;
 
                 if (message.startsWith('/')) {
-                    Logger.log(Level.INFO, "TODO: Commands");
-                    await sender.sendMessage("TODO: Commands");
+                    switch (message.slice(1, message.length)) {
+                        case "time": {
+                            await sender.sendMessage("The time in ticks is: " + this._time);
+                            await sender.sendMessage("Is it day? " + this.isDay());
+                            await sender.sendMessage("Is it night? " + this.isNight());
+                        } break;
+
+                        default: {
+                            await sender.sendMessage(colorMessage("&cUnknown command."));
+                        } break;
+                    }
                     return;
                 }
 
@@ -350,12 +361,13 @@ export default class MinecraftServer {
         return client! ?? null;
     }
 
-    isDay() {
-        return false;
+    // They need return types, to not conflict?
+    isDay(): boolean {
+        return !this.isNight() && this._time <= 12000;
     }
 
-    isNight() {
-        return false;
+    isNight(): boolean {
+        return !this.isDay() && this._time > 12000;
     }
 
     async broadcast(message: string) {
@@ -377,7 +389,7 @@ export default class MinecraftServer {
         await client.write(writer.build());
     }
 
-    async sendChunks(client: Client, player: Player) {
+    async sendChunks(client: Client) {
         const writer = new ByteWriter;
         writer.write(Type.BYTE, PacketType.CHUNK_DATA);
 
@@ -410,9 +422,6 @@ export default class MinecraftServer {
     }
 
     async sendTimeUpdate(client: Client) {
-        // Time in Ticks elapsed since world creation
-        this._time = Math.floor(Date.now() / 20); // hardcoded as vanilla ticks
-        // LOL ^
         await client.write(new ByteWriter()
                                 .write(Type.BYTE, PacketType.UPDATE_TIME)
                                 .write(Type.LONG, BigInt(this._time))
@@ -420,7 +429,10 @@ export default class MinecraftServer {
     }
 
     async tick() {
-        for await (const player of this._players.values()) {         
+        for await (const player of this._players.values()) {     
+            this._time++;   
+            if (this._time >= 24000)
+                this._time = 0; 
             const client = this.getClientForPlayer(player);
             if (client !== null) {
                 await this.sendKeepAlive(client);

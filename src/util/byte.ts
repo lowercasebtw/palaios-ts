@@ -111,7 +111,7 @@ export class ByteReader {
     read_bytes(size: number) {
         if (this._cursor + size > this._bytes.length)
             throw new Error("Index out of bounds");
-        const bytes = this._bytes.slice(this._cursor, this._cursor + size);
+        const bytes = new Uint8Array(this._bytes.slice(this._cursor, this._cursor + size));
         this._cursor += size;
         return bytes;
     }
@@ -237,7 +237,7 @@ export class NBTByteReader {
     read_bytes(size: number) {
         if (this._cursor + size > this._bytes.length)
             throw new Error("Index out of bounds");
-        const bytes = this._bytes.slice(this._cursor, this._cursor + size);
+        const bytes = new Uint8Array(this._bytes.slice(this._cursor, this._cursor + size));
         this._cursor += size;
         return bytes;
     }

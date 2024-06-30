@@ -30,9 +30,7 @@ export class Entity {
     
     getLocation() { return this._location; }
 
-    setLocation(location: Location) {
-        this._location = location;
-    }
+    setLocation(location: Location) { this._location = location; }
 
     getHealth() { return this._health; }
     
