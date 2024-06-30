@@ -1,6 +1,24 @@
 import * as pako from "https://deno.land/x/pako@v2.0.3/pako.js";
 import { ByteReader, ByteWriter, Type } from "../util/byte.ts";
 
+function write_nbt_string(writer: ByteWriter, value: any) {
+    if (!(typeof value === "string"))
+        throw new Error("ByteWriter tried to write a string, but got something that wasn't a string.");
+    if (value === null || value.length === 0)
+        return writer; // Skip it
+    writer.write(Type.SHORT, value.length);
+    for (const byte of value.split('').map(c => c.charCodeAt(0))) {
+        writer.write(Type.BYTE, byte);
+    }
+    return writer;
+}
+
+function read_nbt_string(reader: ByteReader) {
+    const length = reader.read(Type.SHORT) as number;
+    const bytes = reader.read_bytes(length);
+    return String.fromCharCode(...bytes);
+}
+
 export enum NBT_Type {
 	END,
 	BYTE,
@@ -18,7 +36,7 @@ export enum NBT_Type {
 }
 
 function read_name(reader: ByteReader, should_read_name: boolean) {
-	return !should_read_name ? null : reader.read(Type.STRING) as string;
+	return !should_read_name ? null : read_nbt_string(reader);
 }
 
 export abstract class NBT_Tag {
@@ -40,9 +58,9 @@ export class NBT_End extends NBT_Tag {
 	}
 
 	override to_bytes() {
-		return new ByteWriter()
-				.write(Type.BYTE, NBT_Type.END)
-				.build();
+		const writer = new ByteWriter();
+		writer.write(Type.BYTE, NBT_Type.END);
+		return writer.build();
 	}
 }
 
@@ -58,11 +76,11 @@ export class NBT_Byte extends NBT_Tag {
 	}
 
 	override to_bytes() {
-		return new ByteWriter()
-					.write(Type.BYTE, NBT_Type.BYTE)
-					.write(Type.STRING, this.name!)
-					.write(Type.BYTE, this.value)
-					.build();
+		const writer = new ByteWriter();
+		writer.write(Type.BYTE, NBT_Type.BYTE);
+		write_nbt_string(writer, this.name!);
+		writer.write(Type.BYTE, this.value);
+		return writer.build();
 	}
 }
 
@@ -77,11 +95,11 @@ export class NBT_Short extends NBT_Tag {
 	}
 
 	override to_bytes() {
-		return new ByteWriter()
-					.write(Type.BYTE, NBT_Type.SHORT)
-					.write(Type.STRING, this.name!)
-					.write(Type.SHORT, this.value)
-					.build();
+		const writer = new ByteWriter();
+		writer.write(Type.BYTE, NBT_Type.SHORT);
+		write_nbt_string(writer, this.name!);
+		writer.write(Type.SHORT, this.value);
+		return writer.build();
 	}
 }
 
@@ -97,11 +115,11 @@ export class NBT_Integer extends NBT_Tag {
 	}
 
 	override to_bytes() {
-		return new ByteWriter()
-					.write(Type.BYTE, NBT_Type.INTEGER)
-					.write(Type.STRING, this.name!)
-					.write(Type.INTEGER, this.value)
-					.build();
+		const writer = new ByteWriter();
+		writer.write(Type.BYTE, NBT_Type.INTEGER);
+		write_nbt_string(writer, this.name!);
+		writer.write(Type.INTEGER, this.value);
+		return writer.build();
 	}
 }
 
@@ -117,11 +135,11 @@ export class NBT_Long extends NBT_Tag {
 	}
 
 	override to_bytes() {
-		return new ByteWriter()
-					.write(Type.BYTE, NBT_Type.LONG)
-					.write(Type.STRING, this.name!)
-					.write(Type.LONG, this.value)
-					.build();
+		const writer = new ByteWriter();
+		writer.write(Type.BYTE, NBT_Type.LONG);
+		write_nbt_string(writer, this.name!);
+		writer.write(Type.LONG, this.value);
+		return writer.build();
 	}
 }
 
@@ -137,11 +155,11 @@ export class NBT_Float extends NBT_Tag {
 	}
 
 	override to_bytes() {
-		return new ByteWriter()
-					.write(Type.BYTE, NBT_Type.FLOAT)
-					.write(Type.STRING, this.name!)
-					.write(Type.FLOAT, this.value)
-					.build();
+		const writer = new ByteWriter();
+		writer.write(Type.BYTE, NBT_Type.FLOAT);
+		write_nbt_string(writer, this.name!);
+		writer.write(Type.FLOAT, this.value);
+		return writer.build();
 	}
 }
 
@@ -157,11 +175,11 @@ export class NBT_Double extends NBT_Tag {
 	}
 
 	override to_bytes() {
-		return new ByteWriter()
-					.write(Type.BYTE, NBT_Type.DOUBLE)
-					.write(Type.STRING, this.name!)
-					.write(Type.DOUBLE, this.value)
-					.build();
+		const writer = new ByteWriter();
+		writer.write(Type.BYTE, NBT_Type.DOUBLE);
+		write_nbt_string(writer, this.name!);
+		writer.write(Type.DOUBLE, this.value);
+		return writer.build();
 	}
 }
 
@@ -178,12 +196,11 @@ export class NBT_Byte_Array extends NBT_Tag {
 	}
 
 	override to_bytes() {
-		return new ByteWriter()
-					.write(Type.BYTE, NBT_Type.BYTE_ARRAY)
-					.write(Type.STRING, this.name!)
-					.write(Type.INTEGER, this.size)
-					.append(this.bytes)
-					.build();
+		const writer = new ByteWriter().write(Type.BYTE, NBT_Type.BYTE_ARRAY);
+		write_nbt_string(writer, this.name!);
+		writer.write(Type.INTEGER, this.size);
+		writer.append(this.bytes);
+		return writer.build();
 	}
 }
 
@@ -194,16 +211,15 @@ export class NBT_String extends NBT_Tag {
 
 	static from_reader(reader: ByteReader, should_read_name: boolean) {
 		const name = read_name(reader, should_read_name);
-		const value = reader.read(Type.STRING) as string;
+		const value = read_nbt_string(reader);
 		return new NBT_String(name, value);
 	}
 
 	override to_bytes() {
-		return new ByteWriter()
-					.write(Type.BYTE, NBT_Type.STRING)
-					.write(Type.STRING, this.name!)
-					.write(Type.STRING, this.value)
-					.build();
+		const writer = new ByteWriter().write(Type.BYTE, NBT_Type.STRING);
+		write_nbt_string(writer, this.name!);
+		write_nbt_string(writer, this.value);
+		return writer.build();
 	}
 }
 
@@ -231,7 +247,7 @@ export class NBT_List extends NBT_Tag {
 		}
 		const writer = new ByteWriter;
 		writer.write(Type.BYTE, NBT_Type.LIST);
-		writer.write(Type.STRING, this.name!);
+		write_nbt_string(writer, this.name!);
 		writer.write(Type.BYTE, this.type_id);
 		writer.write(Type.INTEGER, this.size);
 		for (const tag of this.tags) {
@@ -272,7 +288,7 @@ export class NBT_Compound extends NBT_Tag {
 	override to_bytes() {
 		const writer = new ByteWriter;
 		writer.write(Type.BYTE, NBT_Type.COMPOUND);
-		writer.write(Type.STRING, this.name!);
+		write_nbt_string(writer, this.name!);
 		for (const tag of this.tags) {
 			writer.append(tag.to_bytes());
 		}
@@ -299,10 +315,11 @@ export class NBT_Integer_Array extends NBT_Tag {
 	override to_bytes() {
 		const writer = new ByteWriter;
 		writer.write(Type.BYTE, NBT_Type.INTEGER_ARRAY);
-		writer.write(Type.STRING, this.name!);
+		write_nbt_string(writer, this.name!);
 		writer.write(Type.INTEGER, this.values.length);
-		for (let i = 0; i < this.values.length; ++i) 
+		for (let i = 0; i < this.values.length; ++i) {
 			writer.write(Type.INTEGER, this.values[i]);
+		}
 		return writer.build();
 	}
 }
@@ -325,10 +342,11 @@ export class NBT_Long_Array extends NBT_Tag {
 	override to_bytes() {
 		const writer = new ByteWriter;
 		writer.write(Type.BYTE, NBT_Type.LONG_ARRAY);
-		writer.write(Type.STRING, this.name!);
+		write_nbt_string(writer, this.name!);
 		writer.write(Type.INTEGER, this.values.length);
-		for (let i = 0; i < this.values.length; ++i) 
+		for (let i = 0; i < this.values.length; ++i) {
 			writer.write(Type.LONG, this.values[i]);
+		}
 		return writer.build();
 	}
 }

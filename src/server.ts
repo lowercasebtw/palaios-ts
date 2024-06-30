@@ -5,7 +5,7 @@ import { Entity } from "./game/entity/Entity.ts";
 import { EntityType } from "./game/entity/EntityType.ts";
 import { Player } from "./game/entity/Player.ts";
 import { Level, Logger } from "./logger/Logger.ts";
-import { kick_packet, PacketType, ProtocolVersion, sendHandshakePacket, sendLoginRequestPacket } from "./packet.ts";
+import { kick_packet, PacketType, ProtocolVersion, read_packet_string, sendHandshakePacket, sendLoginRequestPacket } from "./packet.ts";
 import { ByteReader, ByteWriter, Type } from "./util/byte.ts";
 import { colorMessage, stripColor } from "./util/color.ts";
 import { Location, Vec3d } from "./util/mth.ts";
@@ -133,7 +133,7 @@ export default class MinecraftServer {
 
                 // Login Request
                 const protocol_id = reader.read(Type.INTEGER) as number;
-                const username = reader.read(Type.STRING) as string;
+                const username = read_packet_string(reader);
                 
                 if (protocol_id != ProtocolVersion.v1_2_4_to_1_2_5) {
                     await kick_packet(client, `You are using a outdated client, ${username}! You are using ${protocol_id}`);
@@ -165,7 +165,7 @@ export default class MinecraftServer {
             } break;   
 
             case PacketType.CHAT_MESSAGE: {
-                const message = reader.read(Type.STRING) as string;
+                const message = read_packet_string(reader);
                 const sender = this.getPlayerForClient(client);
                 if (sender === null) 
                     return;
@@ -281,7 +281,7 @@ export default class MinecraftServer {
 
             case PacketType.PLUGIN_MESSAGE: {
                 // Plugin Message
-                const channel = reader.read(Type.STRING) as string;
+                const channel = read_packet_string(reader);
                 const byte_len = reader.read(Type.SHORT) as number;
                 // const bytes = reader.read_bytes(byte_len);
                 Logger.log(Level.INFO, `Got Plugin Message ('${channel}') [ ...${byte_len} bytes ]`);
@@ -361,13 +361,12 @@ export default class MinecraftServer {
         return client! ?? null;
     }
 
-    // They need return types, to not conflict?
-    isDay(): boolean {
-        return !this.isNight() && this._time <= 12000;
+    isDay() {
+        return this._time <= 12000;
     }
 
-    isNight(): boolean {
-        return !this.isDay() && this._time > 12000;
+    isNight() {
+        return this._time > 12000;
     }
 
     async broadcast(message: string) {

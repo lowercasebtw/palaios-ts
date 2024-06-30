@@ -2,31 +2,14 @@ import { Buffer } from "https://deno.land/std@0.177.0/node/buffer.ts";
 
 // https://wiki.vg/Data_types
 
-export class ByteUtil {
-    /**
-     * Packets cannot be larger than 221 − 1 or 2097151 bytes 
-     * (the maximum that can be sent in a 3-byte VarInt). 
-     * Moreover, the length field must not be longer than 3 bytes, even if the encoded value 
-     * is within the limit. Unnecessarily long encodings at 3 bytes or below are still allowed. 
-     * For compressed packets, this applies to the Packet Length field, i.e. the compressed length.
-     */
-    static readonly MAX_BYTES_ALLOWED = 2097151;
-
-    // TODO: wont need probably in the future
-    // @Deprecated
-    static as_bytes(bytes: string) {
-        return new Uint8Array([...bytes].map(c => c.charCodeAt(0)));
-    }
-
-    // TODO: wont need probably in the future
-    // @Deprecated
-    static as_string(bytes: Uint8Array, null_terminated = false) {
-        let string = "";
-        for (let i = null_terminated ? 3 : 0; i < bytes.length; ++i)
-            string += String.fromCharCode(bytes[i]);
-        return string;
-    }
-}
+/**
+ * Packets cannot be larger than 221 − 1 or 2097151 bytes 
+ * (the maximum that can be sent in a 3-byte VarInt). 
+ * Moreover, the length field must not be longer than 3 bytes, even if the encoded value 
+ * is within the limit. Unnecessarily long encodings at 3 bytes or below are still allowed. 
+ * For compressed packets, this applies to the Packet Length field, i.e. the compressed length.
+ */
+export const MAX_BYTES_ALLOWED = 2097151;
 
 export enum Type {
     BOOLEAN,
@@ -35,7 +18,6 @@ export enum Type {
     FLOAT,
     DOUBLE,
     LONG,
-    STRING,
     BYTE,
     UNSIGNED_BYTE,
     VAR_INT,
@@ -69,16 +51,6 @@ export class ByteReader {
             case Type.FLOAT: return Buffer.from(this.read_bytes(4)).readFloatBE();
             case Type.DOUBLE: return Buffer.from(this.read_bytes(8)).readDoubleBE();
             case Type.LONG: return Buffer.from(this.read_bytes(8)).readBigInt64BE(); // longs are bing int 64
-
-            case Type.STRING: {
-                const length = this.read(Type.SHORT) as number;
-                if (length === 0)
-                    return "";
-                let string = "";
-                for (let i = 0; i < length; ++i)
-                    string += String.fromCharCode(this.read(Type.SHORT) as number);
-                return string;
-            }
 
             case Type.BYTE:
             case Type.UNSIGNED_BYTE: {
@@ -166,14 +138,6 @@ export class ByteWriter {
                 this.append(new Uint8Array(buffer));
             } break;
 
-            case Type.STRING: {
-                const message = value as string;
-                this.write(Type.SHORT, message.length);
-                for (let i = 0; i < message.length; ++i) {
-                    this.write(Type.SHORT, message[i].charCodeAt(0));
-                }
-            } break;
-
             case Type.BYTE:
             case Type.UNSIGNED_BYTE: {
                 this._bytes.push((value as number));
@@ -195,124 +159,6 @@ export class ByteWriter {
         }
 
         return this;
-    }
-
-    build() {
-        return new Uint8Array(this._bytes);
-    }
-}
-
-// NBT
-export class NBTByteReader {
-    private _bytes: number[];
-    private _cursor: number;
-    constructor(bytes: number[] | Uint8Array) {
-        this._bytes = (bytes instanceof Uint8Array ? [...bytes] : bytes);
-        this._cursor = 0;
-    }
-
-    get cursor() { return this._cursor; }
-
-    at_end() { return this._cursor >= this._bytes.length; }
-
-    read(type: Type): number | bigint | string {
-        switch (type) {
-            case Type.SHORT: return Buffer.from(this.read_bytes(2)).readInt16BE();
-            case Type.INTEGER: return Buffer.from(this.read_bytes(4)).readInt32BE();
-            case Type.FLOAT: return Buffer.from(this.read_bytes(4)).readFloatBE();
-            case Type.DOUBLE: return Buffer.from(this.read_bytes(8)).readDoubleBE();
-            case Type.LONG: return Buffer.from(this.read_bytes(8)).readBigInt64BE(); // longs are bing int 64
-            case Type.BYTE: return this.read_bytes(1)[0];
-            case Type.STRING: {
-                const length = this.read(Type.SHORT) as number;
-                const bytes = this.read_bytes(length);
-                return String.fromCharCode(...bytes);
-            }
-            default: {
-                throw new Error("Failed to read. Unknown type: " + type);
-            }
-        }
-    }
-
-    read_bytes(size: number) {
-        if (this._cursor + size > this._bytes.length)
-            throw new Error("Index out of bounds");
-        const bytes = new Uint8Array(this._bytes.slice(this._cursor, this._cursor + size));
-        this._cursor += size;
-        return bytes;
-    }
-}
-
-export class NBTByteWriter {
-    private _bytes: number[];
-    constructor() {
-        this._bytes = [];
-    }
-
-    append(other: Uint8Array | number[]): NBTByteWriter {
-        this._bytes.push(...other);
-        return this;
-    }
-
-    write(type: Type, value: number | bigint | string): NBTByteWriter {
-        switch (type) {
-            case Type.SHORT: {
-                const buffer = Buffer.alloc(2);
-                buffer.writeInt16BE(value as number);
-                this.append(new Uint8Array(buffer));
-                return this;
-            }
-            
-            case Type.INTEGER: {
-                const buffer = Buffer.alloc(4);
-                buffer.writeInt32BE(value as number);
-                this.append(new Uint8Array(buffer));
-                return this;
-            }
-            
-            case Type.FLOAT: {
-                const buffer = Buffer.alloc(4);
-                buffer.writeFloatBE(value as number);
-                this.append(new Uint8Array(buffer));
-                return this;
-            }
-            
-            case Type.DOUBLE: {
-                const buffer = Buffer.alloc(8);
-                buffer.writeDoubleBE(value as number);
-                this.append(new Uint8Array(buffer));
-                return this;
-            }
-            
-            // NOTE: Longs are Big Int 64
-            case Type.LONG: {
-                const buffer = Buffer.alloc(8);
-                buffer.writeBigInt64BE(value as bigint);
-                this.append(new Uint8Array(buffer));
-                return this;
-            }
-
-            case Type.BYTE: {
-                this._bytes.push(value as number);
-                return this;
-            }
-            
-            case Type.STRING: {
-                if (!(typeof value === "string"))
-                    throw new Error("ByteWriter tried to write a string, but got something that wasn't a string.");
-                if (value === null || value.length === 0)
-                    return this; // Skip it
-                this.write(Type.SHORT, value.length);
-                for (const byte of value.split('').map(c => c.charCodeAt(0))) {
-                    this.write(Type.BYTE, byte);
-                }
-                return this;
-            }
-
-            default: {
-                throw new Error("Failed to read. Unknown type: " + type);
-            }
-        }
     }
 
     build() {

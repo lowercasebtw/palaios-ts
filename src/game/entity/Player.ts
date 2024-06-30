@@ -1,5 +1,5 @@
 import { server } from "../../index.ts";
-import { PacketType } from "../../packet.ts";
+import { PacketType, write_packet_string } from "../../packet.ts";
 import { ByteWriter, Type } from "../../util/byte.ts";
 import { Gamemode } from "../../util/types.ts";
 import { Entity } from "./Entity.ts";
@@ -54,7 +54,7 @@ export class Player extends Entity {
             return;
         const writer = new ByteWriter();
         writer.write(Type.BYTE, PacketType.CHAT_MESSAGE);
-        writer.write(Type.STRING, message);
+        write_packet_string(writer, message);
         await client.write(writer.build()); 
     }
 

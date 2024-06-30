@@ -1,8 +1,6 @@
 import { Level, Logger } from "./logger/Logger.ts";
-import { PacketType } from "./packet.ts";
-import { ByteUtil } from "./util/byte.ts";
-import { ByteReader } from "./util/byte.ts";
-import { ByteWriter, Type } from "./util/byte.ts";
+import { PacketType, read_packet_string, write_packet_string } from "./packet.ts";
+import { ByteReader, ByteWriter, MAX_BYTES_ALLOWED, Type } from "./util/byte.ts";
 
 const server = await Deno.connect({ port: 25565 });
 
@@ -46,12 +44,11 @@ const sleep = (ms: number) => new Promise(res => setTimeout(res, ms));
 
 // handshake
 {
-    Logger.log(Level.INFO, '(handshake) client -> server')
-    const handshake_str = "lowerdeez;localhost:25565";
-    await state.write(new ByteWriter()
-                            .write(Type.BYTE, PacketType.HANDSHAKE)
-                            .write(Type.STRING, handshake_str)
-                            .build());
+    Logger.log(Level.INFO, '(handshake) client -> server')    
+    const writer = new ByteWriter;
+    writer.write(Type.BYTE, PacketType.HANDSHAKE);
+    write_packet_string(writer, "lowerdeez;localhost:25565");
+    await state.write(writer.build());
 }
 
 Logger.log(Level.INFO, '(handshake) server -> client')
@@ -81,13 +78,13 @@ Logger.log(Level.INFO, '(login req) client -> server')
     //                         .build());
 
     // b1.7.3
-    await state.write(new ByteWriter()
-                            .write(Type.BYTE, PacketType.LOGIN_REQUEST)
-                            .write(Type.INTEGER, 14)
-                            .write(Type.STRING, username)
-                            .write(Type.LONG, BigInt(0))
-                            .write(Type.BYTE, 0)
-                            .build());
+    const writer = new ByteWriter;
+    writer.write(Type.BYTE, PacketType.LOGIN_REQUEST);
+    writer.write(Type.INTEGER, 14);
+    write_packet_string(writer, username);
+    writer.write(Type.LONG, BigInt(0));
+    writer.write(Type.BYTE, 0);
+    await state.write(writer.build());
 }
 
 // await sleep(1.25 * 1000);
@@ -109,7 +106,7 @@ Logger.log(Level.INFO, '(message) client -> server')
 let ticks = 0;
 while (true) {
     if (!state.isClosed()) {
-        let data = new Uint8Array(ByteUtil.MAX_BYTES_ALLOWED);
+        let data = new Uint8Array(MAX_BYTES_ALLOWED);
         const data_len = await state.read(data) as number;
         data = data.slice(0, data_len);
         const reader = new ByteReader(data);
@@ -118,21 +115,22 @@ while (true) {
             
             if (packet_id == PacketType.KICK_DISCONNECT) {
                 state.close();
-                console.log(reader.read(Type.STRING) as string);
+                console.log(read_packet_string(reader));
                 // await sleep(1 * 1000);
                 // Deno.exit(0);
             }
 
             if (packet_id == PacketType.CHAT_MESSAGE) {
-                const message = reader.read(Type.STRING) as string;
+                const message = read_packet_string(reader);
                 console.log(message);
                 if (!message.includes(username)) {
                     const parts = message.split(" ");
                     parts.shift();
-                    await state.write(new ByteWriter()
-                                            .write(Type.BYTE, PacketType.CHAT_MESSAGE)
-                                            .write(Type.STRING, parts.join(''))
-                                            .build());
+                    
+                    const writer = new ByteWriter;
+                    writer.write(Type.BYTE, PacketType.CHAT_MESSAGE);
+                    write_packet_string(writer, parts.join(''));
+                    await state.write(writer.build());
                 }
             }
 

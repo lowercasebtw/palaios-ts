@@ -1,4 +1,4 @@
-import { ByteUtil } from "./byte.ts";
+import { MAX_BYTES_ALLOWED } from "./byte.ts";
 
 export default class ClientConnection {
     private static LAST_CONNECTION_ID = 0;
@@ -32,7 +32,7 @@ export default class ClientConnection {
         this._handler_id = handler_id;
     }
 
-    async read(read_bytes_count: number = ByteUtil.MAX_BYTES_ALLOWED) {
+    async read(read_bytes_count: number = MAX_BYTES_ALLOWED) {
         if (read_bytes_count <= 0) 
             return new Uint8Array;
         const array = new Uint8Array(read_bytes_count);

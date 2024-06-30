@@ -3,7 +3,7 @@
 import { Client } from "https://deno.land/x/tcp_socket@0.0.1/mods.ts";
 import { Player } from "../src/game/entity/Player.ts";
 import ItemStack from "../src/game/item/ItemStack.ts";
-import { ByteWriter, Type } from "../src/util/byte.ts";
+import { ByteReader, ByteWriter, Type } from "../src/util/byte.ts";
 import MinecraftServer from "./server.ts";
 import { generateHash } from "./util/hash.ts";
 import { WorldType } from "./util/types.ts";
@@ -83,43 +83,62 @@ export enum PacketType {
     KICK_DISCONNECT = 255,
 }
 
+export function write_packet_string(writer: ByteWriter, message: string) {
+    writer.write(Type.SHORT, message.length);
+    for (let i = 0; i < message.length; ++i) {
+        writer.write(Type.SHORT, message[i].charCodeAt(0));
+    }
+    return writer;
+}
+
+export function read_packet_string(reader: ByteReader) {
+    const length = reader.read(Type.SHORT) as number;
+    if (length === 0)
+        return "";
+    let string = "";
+    for (let i = 0; i < length; ++i)
+        string += String.fromCharCode(reader.read(Type.SHORT) as number);
+    return string;
+}
+
 export async function sendLoginRequestPacket(client: Client, server: MinecraftServer, player: Player) {
-    await client.write(new ByteWriter()
-                            .write(Type.BYTE, PacketType.LOGIN_REQUEST)
-                            .write(Type.INTEGER, ProtocolVersion.v1_2_4_to_1_2_5)
-                            .write(Type.STRING, player.getUsername())
-                            .write(Type.STRING, WorldType.DEFAULT)
-                            .write(Type.INTEGER, player.getGamemode())
-                            .write(Type.INTEGER, server.getDifficulty())    
-                            .write(Type.BYTE, server.getDifficulty())
-                            .write(Type.BYTE, 128)
-                            .write(Type.BYTE, 1)
-                            .build());
+    const writer = new ByteWriter;
+    writer.write(Type.BYTE, PacketType.LOGIN_REQUEST);
+    writer.write(Type.INTEGER, ProtocolVersion.v1_2_4_to_1_2_5);
+    write_packet_string(writer, player.getUsername());
+    write_packet_string(writer, WorldType.DEFAULT);
+    writer.write(Type.INTEGER, player.getGamemode());
+    writer.write(Type.INTEGER, server.getDifficulty());
+    writer.write(Type.BYTE, server.getDifficulty());
+    writer.write(Type.BYTE, 128);
+    writer.write(Type.BYTE, 1);
+    await client.write(writer.build());
 }
 
 export async function sendHandshakePacket(client: Client, isOnlineMode: boolean) {
-    const writer = new ByteWriter();
+    const writer = new ByteWriter;
     writer.write(Type.BYTE, PacketType.HANDSHAKE);
     // TODO: Fix The Hash
-    writer.write(Type.STRING, isOnlineMode ? generateHash() : "-");
+    write_packet_string(writer, isOnlineMode ? generateHash() : "-");
     await client.write(writer.build());
 }
 
 export async function sendWindowItemsPacket(client: Client, window_id: number, items: ItemStack[]) {
     if (items.length < 44)
         return; // invalid
-    const writer = new ByteWriter();
+    const writer = new ByteWriter;
     writer.write(Type.BYTE, PacketType.SET_WINDOW_ITEMS);
     writer.write(Type.BYTE, window_id);
     writer.write(Type.SHORT, items.length);
-    for (const itemStack of items) 
+    for (const itemStack of items) {
         writer.append(itemStack.bytes());
+    }
     await client.write(writer.build());
 }
 
 export async function kick_packet(client: Client, reason: string) {
-    await client.write(new ByteWriter()
-                        .write(Type.BYTE, PacketType.KICK_DISCONNECT)
-                        .write(Type.STRING, reason)
-                        .build());
+    const writer = new ByteWriter;
+    writer.write(Type.BYTE, PacketType.KICK_DISCONNECT);
+    write_packet_string(writer, reason);
+    await client.write(writer.build());
 }
