@@ -83,7 +83,7 @@ export enum PacketType {
     KICK_DISCONNECT = 255,
 }
 
-export function write_packet_string(writer: ByteWriter, message: string) {
+export function writePacketString(writer: ByteWriter, message: string) {
     writer.write(Type.SHORT, message.length);
     for (let i = 0; i < message.length; ++i) {
         writer.write(Type.SHORT, message[i].charCodeAt(0));
@@ -91,7 +91,7 @@ export function write_packet_string(writer: ByteWriter, message: string) {
     return writer;
 }
 
-export function read_packet_string(reader: ByteReader) {
+export function readPacketString(reader: ByteReader) {
     const length = reader.read(Type.SHORT) as number;
     if (length === 0)
         return "";
@@ -105,8 +105,8 @@ export async function sendLoginRequestPacket(client: Client, server: MinecraftSe
     const writer = new ByteWriter;
     writer.write(Type.BYTE, PacketType.LOGIN_REQUEST);
     writer.write(Type.INTEGER, ProtocolVersion.v1_2_4_to_1_2_5);
-    write_packet_string(writer, player.getUsername());
-    write_packet_string(writer, WorldType.DEFAULT);
+    writePacketString(writer, player.getUsername());
+    writePacketString(writer, WorldType.DEFAULT);
     writer.write(Type.INTEGER, player.getGamemode());
     writer.write(Type.INTEGER, server.getDifficulty());
     writer.write(Type.BYTE, server.getDifficulty());
@@ -119,7 +119,7 @@ export async function sendHandshakePacket(client: Client, isOnlineMode: boolean)
     const writer = new ByteWriter;
     writer.write(Type.BYTE, PacketType.HANDSHAKE);
     // TODO: Fix The Hash
-    write_packet_string(writer, isOnlineMode ? generateHash() : "-");
+    writePacketString(writer, isOnlineMode ? generateHash() : "-");
     await client.write(writer.build());
 }
 
@@ -136,9 +136,9 @@ export async function sendWindowItemsPacket(client: Client, window_id: number, i
     await client.write(writer.build());
 }
 
-export async function kick_packet(client: Client, reason: string) {
+export async function sendKickPacket(client: Client, reason: string) {
     const writer = new ByteWriter;
     writer.write(Type.BYTE, PacketType.KICK_DISCONNECT);
-    write_packet_string(writer, reason);
+    writePacketString(writer, reason);
     await client.write(writer.build());
 }

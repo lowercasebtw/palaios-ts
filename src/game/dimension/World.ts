@@ -23,9 +23,10 @@ export default class World {
         try {
             if (!existsSync(this.world_path))
                 throw new Error(); // World doesn't exist
+
             const level_nbt = parse_nbt_file(Deno.readFileSync(this.world_path + "/level.dat"));
             // TODO
-        } catch(e) {
+        } catch (e) {
             console.error("Failed to load world " + DimensionType[this.dimension] + ", loading default...");
             // TODO: write the world to file
             // load a new world, or crash
@@ -40,15 +41,15 @@ export default class World {
     }
 
     getDimensionType() { return this.dimension; }
-    
+
     getWorldType() { return this.type; }
 
-    getChunkAt(x: number, z: number): Chunk | null { 
-        return this._chunks[z * 128 + x] ?? null; 
+    getChunkAt(x: number, z: number): Chunk | null {
+        return this._chunks[z * 128 + x] ?? null;
     }
 
-    getBlockAt(x: number, y: number, z: number): Block | null { 
-        const chunk = this.getChunkAt(Math.floor(x/16), Math.floor(z/16));
+    getBlockAt(x: number, y: number, z: number): Block | null {
+        const chunk = this.getChunkAt(Math.floor(x / 16), Math.floor(z / 16));
         if (chunk == null)
             return null;
         return chunk.getBlockAt(x, y, z);

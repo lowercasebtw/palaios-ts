@@ -1,5 +1,5 @@
 import { Level, Logger } from "./logger/Logger.ts";
-import { PacketType, read_packet_string, write_packet_string } from "./packet.ts";
+import { PacketType, readPacketString, writePacketString } from "./packet.ts";
 import { ByteReader, ByteWriter, MAX_BYTES_ALLOWED, Type } from "./util/byte.ts";
 
 const server = await Deno.connect({ port: 25565 });
@@ -47,7 +47,7 @@ const sleep = (ms: number) => new Promise(res => setTimeout(res, ms));
     Logger.log(Level.INFO, '(handshake) client -> server')    
     const writer = new ByteWriter;
     writer.write(Type.BYTE, PacketType.HANDSHAKE);
-    write_packet_string(writer, "lowerdeez;localhost:25565");
+    writePacketString(writer, "lowerdeez;localhost:25565");
     await state.write(writer.build());
 }
 
@@ -81,7 +81,7 @@ Logger.log(Level.INFO, '(login req) client -> server')
     const writer = new ByteWriter;
     writer.write(Type.BYTE, PacketType.LOGIN_REQUEST);
     writer.write(Type.INTEGER, 14);
-    write_packet_string(writer, username);
+    writePacketString(writer, username);
     writer.write(Type.LONG, BigInt(0));
     writer.write(Type.BYTE, 0);
     await state.write(writer.build());
@@ -115,13 +115,13 @@ while (true) {
             
             if (packet_id == PacketType.KICK_DISCONNECT) {
                 state.close();
-                console.log(read_packet_string(reader));
+                console.log(readPacketString(reader));
                 // await sleep(1 * 1000);
                 // Deno.exit(0);
             }
 
             if (packet_id == PacketType.CHAT_MESSAGE) {
-                const message = read_packet_string(reader);
+                const message = readPacketString(reader);
                 console.log(message);
                 if (!message.includes(username)) {
                     const parts = message.split(" ");
@@ -129,7 +129,7 @@ while (true) {
                     
                     const writer = new ByteWriter;
                     writer.write(Type.BYTE, PacketType.CHAT_MESSAGE);
-                    write_packet_string(writer, parts.join(''));
+                    writePacketString(writer, parts.join(''));
                     await state.write(writer.build());
                 }
             }

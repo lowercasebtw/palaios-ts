@@ -1,6 +1,3 @@
-import { server } from "../../index.ts";
-import { PacketType, write_packet_string } from "../../packet.ts";
-import { ByteWriter, Type } from "../../util/byte.ts";
 import { Gamemode } from "../../util/types.ts";
 import { Entity } from "./Entity.ts";
 import { EntityType } from "./EntityType.ts";
@@ -45,28 +42,6 @@ export class Player extends Entity {
     getSaturation() { return this._saturation; }
 
     getExperienceLevel() { return this._experience_level; }
-    
+
     getExperiencePoints() { return this._experience_points; }
-
-    async sendMessage(message: string) {
-        const client = server.getClientForPlayer(this)!;
-        if (client == null)
-            return;
-        const writer = new ByteWriter();
-        writer.write(Type.BYTE, PacketType.CHAT_MESSAGE);
-        write_packet_string(writer, message);
-        await client.write(writer.build()); 
-    }
-
-    async sendHealthUpdate() {
-        const client = server.getClientForPlayer(this)!;
-        if (client == null)
-            return;
-        const writer = new ByteWriter;
-        writer.write(Type.BYTE, PacketType.UPDATE_HEALTH);
-        writer.write(Type.SHORT, this.getHealth());
-        writer.write(Type.SHORT, this.getHungerLevel());
-        writer.write(Type.FLOAT, this.getSaturation());
-        await client.write(writer.build()); 
-    }
 }
