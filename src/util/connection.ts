@@ -48,8 +48,6 @@ export default class ClientConnection {
 			}
 
 			case PacketType.LOGIN_REQUEST: {
-				console.log(packet.data);
-
 				if (server.getOnlinePlayerCount() >= server.getMaxPlayerCount()) {
 					await sendKickPacket(this.client, "The server is full!");
 					return;
@@ -84,7 +82,6 @@ export default class ClientConnection {
 
 			case PacketType.HANDSHAKE: {
 				// Handle Client Data
-				console.log(server.isOnlineMode());
 				await sendHandshakePacket(this.client, server.isOnlineMode());
 				break;
 			}
