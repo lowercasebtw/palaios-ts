@@ -1,4 +1,3 @@
-import * as pako from "https://deno.land/x/pako@v2.0.3/pako.js";
 import { Client, Packet, Server } from "https://deno.land/x/tcp_socket@0.0.1/mods.ts";
 import World from "./game/dimension/World.ts";
 import { Entity } from "./game/entity/Entity.ts";
@@ -50,7 +49,13 @@ export default class MinecraftServer {
 		if (address != null) this.properties.address = address;
 		if (port != null) this.properties.port = port;
 
-		this.tick_interval = setInterval(this.tick.bind(this), 1000 / this.ticks_per_second);
+		this.tick_interval = setInterval(() => {
+			try {
+				this.tick();
+			} catch (error: unknown) {
+				Logger.log(Level.WARNING, "An error has occured when ticking! " + (error as Error).message);
+			}
+		}, 1000 / this.ticks_per_second);
 	}
 
 	private load_properties(): ServerProperties {
@@ -126,14 +131,60 @@ export default class MinecraftServer {
 		await this.server.listen();
 	}
 
-	onPlayerJoin(connection: ClientConnection) {
+	onPlayerJoin(newConnection: ClientConnection) {
 		this.online_player_count++;
-		this.broadcast(colorMessage(`&e${connection.getPlayer()!.getUsername()} has joined`));
+		this.broadcast(colorMessage(`&e${newConnection.getPlayer()!.getUsername()} has joined`));
+		for (const [_, otherConnection] of this.connections) {
+			if (otherConnection.getPlayer() == null) continue; // wtf?
+			// Spawn new player for others
+			newConnection.getPlayer()!.spawn(otherConnection);
+			// connection is new player
+			otherConnection.getPlayer()!.spawn(newConnection);
+		}
 	}
 
 	onPlayerLeave(connection: ClientConnection) {
 		this.broadcast(colorMessage(`&e${connection.getPlayer()!.getUsername()} left`));
 		this.online_player_count--;
+		for (const [_, otherConnection] of this.connections) {
+			otherConnection.sendTabListUpdate(connection, true);
+			const player = connection.getPlayer();
+			if (player != null) {
+				player.remove(otherConnection);
+			}
+		}
+	}
+
+	getConnections() {
+		return this.connections;
+	}
+
+	getPlayerByUsername(username: string) {
+		let player = null;
+		for (const [_, connection] of this.connections) {
+			if (connection.getPlayer() == null) {
+				continue;
+			} else {
+				if (connection.getPlayer()!.getUsername() == username) {
+					player = connection.getPlayer();
+				}
+			}
+		}
+		return player;
+	}
+
+	getConnectionByUsername(username: string) {
+		let _connection = null;
+		for (const [_, connection] of this.connections) {
+			if (connection.getPlayer() == null) {
+				continue;
+			} else {
+				if (connection.getPlayer()!.getUsername() == username) {
+					_connection = connection;
+				}
+			}
+		}
+		return _connection;
 	}
 
 	getDifficulty() {
@@ -214,32 +265,7 @@ export default class MinecraftServer {
 			await connection.sendMessage(message);
 		}
 
-		Logger.log(Level.INFO, stripColor(message));
-	}
-
-	async sendChunks(client: Client) {
-		const writer = new ByteWriter();
-		writer.write(Type.BYTE, PacketType.CHUNK_DATA);
-
-		const worldHeight = 5;
-
-		writer.write(Type.INTEGER, 0); // x
-		writer.write(Type.INTEGER, 0); // z
-		writer.write(Type.BOOLEAN, false); // ?
-		writer.write(Type.SHORT, 0); // minY
-		writer.write(Type.SHORT, worldHeight); // maxY
-
-		const chunkData = [];
-		for (let i = 0; i < worldHeight; ++i) {
-			chunkData.push(0);
-			chunkData.push(0);
-			chunkData.push(0);
-		}
-		writer.write(Type.INTEGER, chunkData.length); // chunkSize
-
-		writer.write(Type.INTEGER, 0); // unused
-		writer.append(pako.deflate(new Uint8Array(chunkData)) as Uint8Array);
-		// await client.write(writer.build());
+		// Logger.log(Level.INFO, stripColor(message));
 	}
 
 	async sendKeepAlive(client: Client) {
@@ -265,6 +291,39 @@ export default class MinecraftServer {
 			await this.sendKeepAlive(client);
 			await this.sendTimeUpdate(client);
 			await connection.sendHealthUpdate();
+
+			// Send other player movement
+			for await (const [_, otherConnection] of this.connections) {
+				if (otherConnection.getPlayer() == null) continue; // skip
+
+				const player = otherConnection.getPlayer()!;
+
+				{
+					const writer = new ByteWriter();
+					writer.write(Type.BYTE, PacketType.ENTITY);
+					writer.write(Type.INTEGER, player.getEntityID());
+					await connection.write(writer.build());
+				}
+
+				{
+					const writer = new ByteWriter();
+					writer.write(Type.BYTE, PacketType.ENTITY_TELEPORT);
+					writer.write(Type.INTEGER, player.getEntityID());
+					const location = player.getLocation();
+					const position = location.getPosition();
+					writer.write(Type.INTEGER, position.x);
+					writer.write(Type.INTEGER, position.y);
+					writer.write(Type.INTEGER, position.z);
+					writer.write(Type.BYTE, location.getYaw());
+					writer.write(Type.BYTE, location.getPitch());
+					await connection.write(writer.build());
+				}
+			}
+
+			// NOTE: ass
+			for await (const [_, otherConnection] of this.connections) {
+				await connection.sendTabListUpdate(otherConnection);
+			}
 		}
 	}
 }

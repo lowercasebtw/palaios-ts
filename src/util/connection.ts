@@ -1,3 +1,4 @@
+import * as pako from "https://deno.land/x/pako@v2.0.3/pako.js";
 import { Client, Packet } from "https://deno.land/x/tcp_socket@0.0.1/mods.ts";
 import MinecraftServer from "../server.ts";
 import {
@@ -6,7 +7,6 @@ import {
 	ProtocolVersion,
 	readPacketString,
 	sendHandshakePacket,
-	sendLoginRequestPacket,
 	writePacketString,
 } from "../packet.ts";
 import { ByteReader, ByteWriter, Type } from "../util/byte.ts";
@@ -15,6 +15,7 @@ import { Location, Vec3d } from "../util/mth.ts";
 import { Level, Logger } from "../logger/Logger.ts";
 import { fetchUUID } from "./util.ts";
 import { Player } from "../game/entity/Player.ts";
+import { Gamemode, WorldType } from "./types.ts";
 
 export default class ClientConnection {
 	private static LAST_CONNECTION_ID = 0;
@@ -28,6 +29,10 @@ export default class ClientConnection {
 		this.id = ClientConnection.LAST_CONNECTION_ID++;
 		this.client = client;
 		this.player = null;
+	}
+	
+	getClient() {
+		return this.client;
 	}
 
 	getPlayer() {
@@ -73,10 +78,69 @@ export default class ClientConnection {
 				}
 
 				this.player = new Player(username, uuid);
-				await sendLoginRequestPacket(this.client, server, this.player);
+				await this.sendLoginRequestPacket(server);
 				await this.sendPlayerPosition();
 				server.onPlayerJoin(this);
-				await server.sendChunks(this.client);
+				// TODO: player abilities
+				// TODO: chunks
+				// await server.sendChunks(this.client);
+
+				for (let chunk_x = -4; chunk_x < 4; chunk_x++) {
+					for (let chunk_z = -4; chunk_z < 4; ++chunk_z) {
+						{
+							// Chunk Allocation
+							const writer = new ByteWriter();
+							writer.write(Type.BYTE, PacketType.PRE_CHUNK);
+							writer.write(Type.INTEGER, chunk_x);
+							writer.write(Type.INTEGER, chunk_z);
+							writer.write(Type.BOOLEAN, true);
+							await this.client.write(writer.build());
+						}
+
+						{
+							// Chunk Data
+							const blocks = new Uint8Array(
+								new Uint8Array(16 * 256 * 16).map((_) => Math.floor(Math.random() * 4)),
+							);
+							const compressed = pako.deflate(blocks);
+
+							// Chunk Data Packet
+							if (compressed) {
+								// this.sendMessage("Sending chunk with size: " + compressed.length);
+								const writer = new ByteWriter();
+								writer.write(Type.BYTE, PacketType.CHUNK_DATA);
+								writer.write(Type.INTEGER, chunk_x); // Chunk X
+								writer.write(Type.INTEGER, chunk_z); // Chunk Z
+								writer.write(Type.BOOLEAN, true); // Ground-up continuous
+								writer.write(Type.SHORT, 15); // primary bitmap (Bitmask with 1 for every 16x16x16 section which data follows in the compressed data.)
+								writer.write(Type.SHORT, 0); // add bitmap
+								writer.write(Type.INTEGER, compressed.length); // size of compressed data
+								writer.write(Type.INTEGER, 0); // unused?
+
+								for (let i = 0; i < compressed.length; ++i) {
+									writer.write(Type.BYTE, compressed[i]);
+								}
+
+								await this.client.write(writer.build());
+							} else {
+								this.sendMessage("Failed to send chunk!");
+							}
+						}
+					}
+				}
+
+				// The payload is a set of 16x16x16 sections, sharing the same X and Z coordinates. What is and isn't sent is provided by the two bitmask fields. The least significant bit is '1' if the section spanning from Y=0 to Y=15 is not completely air, and so forth. For block IDs, metadata, and lighting, the primary bitmask is used. A secondary bitmask is used for 'add' data, which is Mojang's means of provided Block IDs past 256. In vanilla minecraft, you can expect this to always be zero. The sections included in this packet progress from bottom to top, where Y=0 is the bottom.
+
+				// The data is compressed using the deflate() function in zlib. After uncompressing, the data consists of five (or six) sequential sections, in order:
+
+				// Block type array (1 byte per block, 4096 bytes per section)
+				// Block metadata array (half byte per block, 2048 bytes per section)
+				// Block light array (half byte per block, 2048 bytes per section)
+				// Sky light array (half byte per block, 2048 bytes per section)
+				// Add array (half byte per block, 2048 bytes per section, uses second bitmask)
+				// Biome array (1 byte per XZ coordinate, 256 bytes total, only sent if 'ground up continuous' is true)
+				// Each section is the concatenated data of all included sections (i.e. the block type array contains the block types of all included sections).
+
 				break;
 			}
 
@@ -91,11 +155,28 @@ export default class ClientConnection {
 				if (this.player == null) return;
 
 				if (message.startsWith("/")) {
-					switch (message.slice(1, message.length)) {
+					const parts = message.slice(1, message.length).split(" ");
+					const cmd = parts.shift();
+					switch (cmd) {
 						case "time":
 							await this.sendMessage("The time in ticks is: " + server.getTime());
 							await this.sendMessage("Is it day? " + server.isDay());
 							await this.sendMessage("Is it night? " + server.isNight());
+							break;
+						case "kick":
+							if (parts.length > 0) {
+								const name = parts.shift() as string;
+								await this.sendMessage(`Kicking ${name}!`);
+								const them = server.getConnectionByUsername(name);
+								if (them != null) {
+									sendKickPacket(them.getClient(), "You have been kicked!");
+								} else {
+									await this.sendMessage(`Failed to kick ${name}!`);
+								}
+							} else {
+								await this.sendMessage("You must provide someones ign to kick!");
+							}
+
 							break;
 						default:
 							await this.sendMessage(colorMessage("&cUnknown command."));
@@ -211,6 +292,29 @@ export default class ClientConnection {
 			case PacketType.ANIMATION:
 				break;
 
+			case PacketType.PLAYER_ABILITIES: {
+				if (this.player == null) return;
+
+				// NOTE: I don't think i'm doing this right, might need to send abilities
+				// on join?
+				const invulnerable = reader.read(Type.BOOLEAN) as boolean;
+				const is_flying = reader.read(Type.BOOLEAN) as boolean;
+				const can_fly = reader.read(Type.BOOLEAN) as boolean;
+				const instant_destroy = reader.read(Type.BOOLEAN) as boolean;
+
+				const is_creative = this.player.getGamemode() == Gamemode.CREATIVE;
+				console.log("is c", is_creative);
+				const writer = new ByteWriter();
+				writer.write(Type.BYTE, PacketType.PLAYER_ABILITIES);
+				writer.write(Type.BOOLEAN, is_creative); // Invulnerability
+				writer.write(Type.BOOLEAN, is_flying); // Is flying
+				writer.write(Type.BOOLEAN, is_creative); // Can fly
+				writer.write(Type.BOOLEAN, is_creative); // Instant Destroy
+
+				await this.client.write(writer.build());
+				break;
+			}
+
 			case PacketType.PLUGIN_MESSAGE: {
 				// Plugin Message
 				const channel = readPacketString(reader);
@@ -244,6 +348,22 @@ export default class ClientConnection {
 	close() {}
 
 	// Writing
+
+	async sendLoginRequestPacket(server: MinecraftServer) {
+		if (this.player == null) return; // erm no this shouldnt happen
+		const writer = new ByteWriter();
+		writer.write(Type.BYTE, PacketType.LOGIN_REQUEST);
+		writer.write(Type.INTEGER, ProtocolVersion.v1_2_4_to_1_2_5);
+		writePacketString(writer, this.player.getUsername());
+		writePacketString(writer, WorldType.DEFAULT);
+		writer.write(Type.INTEGER, this.player.getGamemode());
+		writer.write(Type.INTEGER, server.getDifficulty());
+		writer.write(Type.BYTE, server.getDifficulty());
+		writer.write(Type.BYTE, 256); // World Height?
+		writer.write(Type.BYTE, 10); // Tab List Count?
+		await this.client.write(writer.build());
+	}
+
 	async sendPlayerPosition() {
 		// Should this happen?
 		if (this.player == null) return;
@@ -274,5 +394,20 @@ export default class ClientConnection {
 		writer.write(Type.SHORT, this.player.getHungerLevel());
 		writer.write(Type.FLOAT, this.player.getSaturation());
 		await this.client.write(writer.build());
+	}
+
+	async sendTabListUpdate(other: ClientConnection, remove: boolean = false) {
+		// Should this happen?
+		if (this.player == null || other.getPlayer() == null) return;			
+		const writer = new ByteWriter();
+		writer.write(Type.BYTE, PacketType.PLAYER_LIST_ITEM);
+		writePacketString(writer, other.getPlayer()!.getUsername());
+		writer.write(Type.BOOLEAN, !remove); // false to remove
+		writer.write(Type.SHORT, 0); // TODO: Ping
+		await this.client.write(writer.build());
+	}
+	
+	async write(bytes: Uint8Array) {
+		return this.client.write(bytes);
 	}
 }
