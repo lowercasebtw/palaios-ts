@@ -1,78 +1,135 @@
 import { PacketType, writePacketString } from "../../packet.ts";
 import { ByteWriter, Type } from "../../util/byte.ts";
 import ClientConnection from "../../util/connection.ts";
+import { Location, toAbsoluteRotation } from "../../util/mth.ts";
 import { Gamemode } from "../../util/types.ts";
 import { Entity } from "./Entity.ts";
 import { EntityType } from "./EntityType.ts";
 
 export class Player extends Entity {
-    // TODO: UUID class, because uuid is actually numbers
-    private _uuid: string | null;
-    private _username: string;
-    private _gamemode: Gamemode;
-    private _on_ground: boolean;
+	// TODO: UUID class, because uuid is actually numbers
+	private _uuid: string | null;
+	private _username: string;
+	private _gamemode: Gamemode;
+	private _on_ground: boolean;
 
-    private _hunger_bars: number;
-    private _saturation: number;
+	private _hunger_bars: number;
+	private _saturation: number;
 
-    private _experience_level: number;
-    private _experience_points: number;
+	private _experience_level: number;
+	private _experience_points: number;
 
-    private _spawned: boolean;
+	private _last_location: Location | null;
 
-    public constructor(username: string, uuid: string | null) {
-        super(EntityType.PLAYER);
-        this._uuid = uuid;
-        this._username = username;
-        this._gamemode = Gamemode.CREATIVE;
-        this._on_ground = true;
-        this._hunger_bars = 20;
-        this._saturation = 5;
-        this._experience_level = 0;
-        this._experience_points = 0;
-        this._spawned = false;
-    }
+	public constructor(username: string, uuid: string | null) {
+		super(EntityType.PLAYER);
+		this._uuid = uuid;
+		this._username = username;
+		this._gamemode = Gamemode.CREATIVE;
+		this._on_ground = true;
+		this._hunger_bars = 20;
+		this._saturation = 5;
+		this._experience_level = 0;
+		this._experience_points = 0;
+		this._last_location = null;
+	}
 
-    getUUID() { return this._uuid; }
+	getUUID() {
+		return this._uuid;
+	}
 
-    getUsername() { return this._username; }
+	getX() {
+		const position = this.getLocation().getPosition();
+		return position.x;
+	}
 
-    getGamemode() { return this._gamemode; }
+	getY() {
+		const position = this.getLocation().getPosition();
+		return position.y;
+	}
 
-    isOnGround() { return this._on_ground; }
+	getZ() {
+		const position = this.getLocation().getPosition();
+		return position.z;
+	}
 
-    setOnGround(on_ground: boolean) { this._on_ground = on_ground; }
+	getUsername() {
+		return this._username;
+	}
 
-    getHungerLevel() { return this._hunger_bars; }
+	getGamemode() {
+		return this._gamemode;
+	}
 
-    getSaturation() { return this._saturation; }
+	isOnGround() {
+		return this._on_ground;
+	}
 
-    getExperienceLevel() { return this._experience_level; }
+	setOnGround(on_ground: boolean) {
+		this._on_ground = on_ground;
+	}
 
-    getExperiencePoints() { return this._experience_points; }
+	getHungerLevel() {
+		return this._hunger_bars;
+	}
 
-    hasSpawned() { return this._spawned; }
+	getSaturation() {
+		return this._saturation;
+	}
 
-    async spawn(connection: ClientConnection) {
-        if (this._spawned)
-            return;
-        const writer = new ByteWriter;
-        writer.write(Type.BYTE, PacketType.SPAWN_NAMED_ENTITY);
-        writer.write(Type.INTEGER, this.getEntityID());
-        writePacketString(writer, this._username);
-        const location = this.getLocation();
-        const position = location.getPosition();
-        writer.write(Type.INTEGER, position.x);
-        writer.write(Type.INTEGER, position.y);
-        writer.write(Type.INTEGER, position.z);
-        writer.write(Type.BYTE, location.getYaw());
-        writer.write(Type.BYTE, location.getPitch());
-        writer.write(Type.SHORT, 0); // TODO: inventory
-        await connection.write(writer.build());
-        this._spawned = true;
-    }
+	getExperienceLevel() {
+		return this._experience_level;
+	}
 
-    async remove(connection: ClientConnection) {
-        
-    }
+	getExperiencePoints() {
+		return this._experience_points;
+	}
+
+	getLastLocation() {
+		return this._last_location;
+	}
+
+	setLastLocation(location: Location) {
+		this._last_location = location;
+	}
+
+	async spawn(connection: ClientConnection) {
+		const writer = new ByteWriter();
+		writer.write(Type.BYTE, PacketType.SPAWN_NAMED_ENTITY);
+		writer.write(Type.INTEGER, this.getEntityID());
+		writePacketString(writer, this._username);
+		const location = this.getLocation();
+		const position = location.getPosition();
+		writer.write(Type.INTEGER, position.x);
+		writer.write(Type.INTEGER, position.y);
+		writer.write(Type.INTEGER, position.z);
+		writer.write(Type.BYTE, this.getYaw());
+		writer.write(Type.BYTE, this.getPitch());
+		writer.write(Type.SHORT, 0); // TODO: inventory
+		await connection.write(writer.build());
+	}
+
+	async remove(connection: ClientConnection) {
+		const writer = new ByteWriter();
+		writer.write(Type.BYTE, PacketType.DESTROY_ENTITY);
+		writer.write(Type.INTEGER, this.getEntityID());
+		await connection.write(writer.build());
+	}
+
+	async teleport(
+		connection: ClientConnection,
+		x: number = this.getX(),
+		y: number = this.getY(),
+		z: number = this.getZ(),
+	) {
+		const writer = new ByteWriter();
+		writer.write(Type.BYTE, PacketType.REL_ENTITY_MOVE_LOOK);
+		writer.write(Type.INTEGER, this.getEntityID());
+		writer.write(Type.BYTE, toAbsoluteRotation(x));
+		writer.write(Type.BYTE, toAbsoluteRotation(y));
+		writer.write(Type.BYTE, toAbsoluteRotation(z));
+		writer.write(Type.BYTE, toAbsoluteRotation(this.getYaw()));
+		writer.write(Type.BYTE, toAbsoluteRotation(this.getPitch()));
+		await connection.write(writer.build());
+	}
 }

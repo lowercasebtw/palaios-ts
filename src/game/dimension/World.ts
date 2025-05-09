@@ -40,6 +40,10 @@ export default class World {
         }
     }
 
+    async tick() {
+
+    }
+
     getDimensionType() { return this.dimension; }
 
     getWorldType() { return this.type; }

@@ -6,14 +6,13 @@ import { Player } from "./game/entity/Player.ts";
 import { Level, Logger } from "./logger/Logger.ts";
 import { PacketType } from "./packet.ts";
 import { ByteWriter, Type } from "./util/byte.ts";
-import { Difficulty, DimensionType, ServerProperties, WorldType } from "./util/types.ts";
-import ClientConnection from "./util/connection.ts";
 import { colorMessage, stripColor } from "./util/color.ts";
+import ClientConnection from "./util/connection.ts";
+import { toAbsolutePosition, toAbsoluteRotation } from "./util/mth.ts";
+import { Difficulty, DimensionType, ServerProperties, WorldType } from "./util/types.ts";
 
 export default class MinecraftServer {
 	private server!: Server;
-
-	private online_player_count: number;
 
 	private entities: Entity[];
 	private connections: Map<Client, ClientConnection>;
@@ -33,7 +32,6 @@ export default class MinecraftServer {
 
 	constructor(address: string | null = null, port: number | null = null) {
 		// Could be wrong implementation
-		this.online_player_count = 0;
 		this.entities = [];
 		this.connections = new Map();
 		this.difficulty = Difficulty.PEACEFUL;
@@ -132,25 +130,61 @@ export default class MinecraftServer {
 	}
 
 	onPlayerJoin(newConnection: ClientConnection) {
-		this.online_player_count++;
-		this.broadcast(colorMessage(`&e${newConnection.getPlayer()!.getUsername()} has joined`));
+		const msg = colorMessage(`&e${newConnection.getPlayer()!.getUsername()} has joined`);
+		this.broadcast(msg);
+		Logger.log(Level.INFO, stripColor(msg));
+
 		for (const [_, otherConnection] of this.connections) {
 			if (otherConnection.getPlayer() == null) continue; // wtf?
-			// Spawn new player for others
-			newConnection.getPlayer()!.spawn(otherConnection);
-			// connection is new player
-			otherConnection.getPlayer()!.spawn(newConnection);
+			// Don't spawn if you
+			if (otherConnection != newConnection) {
+				// Spawn new player for others
+				newConnection.getPlayer()!.spawn(otherConnection);
+				// spawn others for new player?
+				otherConnection.getPlayer()!.spawn(newConnection);
+			}
 		}
 	}
 
 	onPlayerLeave(connection: ClientConnection) {
-		this.broadcast(colorMessage(`&e${connection.getPlayer()!.getUsername()} left`));
-		this.online_player_count--;
+		const msg = colorMessage(`&e${connection.getPlayer()!.getUsername()} left`);
+		this.broadcast(msg);
+		Logger.log(Level.INFO, stripColor(msg));
+
 		for (const [_, otherConnection] of this.connections) {
 			otherConnection.sendTabListUpdate(connection, true);
 			const player = connection.getPlayer();
 			if (player != null) {
 				player.remove(otherConnection);
+			}
+		}
+	}
+
+	async updatePlayerPosition(connection: ClientConnection) {
+		for await (const [_, otherConnection] of this.connections) {
+			if (otherConnection != connection) {
+				const player = connection.getPlayer()!;
+				const prevLocation = player.getLastLocation();
+				const currentLocation = player.getLocation();
+				if (prevLocation != null) {
+					const writer = new ByteWriter();
+					writer.write(Type.BYTE, PacketType.REL_ENTITY_MOVE_LOOK);
+					writer.write(Type.INTEGER, player.getEntityID());
+					const oldPos = prevLocation.getPosition();
+					const newPos = currentLocation.getPosition();
+
+					const nx = newPos.x - oldPos.x;
+					const ny = newPos.y - oldPos.y;
+					const nz = newPos.z - oldPos.z;
+					console.log(`Teleporting ${player.getUsername()} to ${nx} ${ny} ${nz}`);
+
+					writer.write(Type.BYTE, toAbsolutePosition(nx));
+					writer.write(Type.BYTE, toAbsolutePosition(ny));
+					writer.write(Type.BYTE, toAbsolutePosition(nz));
+					writer.write(Type.BYTE, toAbsoluteRotation(player.getYaw()));
+					writer.write(Type.BYTE, toAbsoluteRotation(player.getPitch()));
+					await otherConnection.write(writer.build());
+				}
 			}
 		}
 	}
@@ -200,7 +234,13 @@ export default class MinecraftServer {
 	}
 
 	getOnlinePlayerCount() {
-		return this.online_player_count;
+		let online = 0;
+		for (const [_, connection] of this.connections) {
+			if (connection.getPlayer() != null) {
+				online++;
+			}
+		}
+		return online;
 	}
 
 	isOnlineMode() {
@@ -305,20 +345,12 @@ export default class MinecraftServer {
 					await connection.write(writer.build());
 				}
 
-				{
-					const writer = new ByteWriter();
-					writer.write(Type.BYTE, PacketType.ENTITY_TELEPORT);
-					writer.write(Type.INTEGER, player.getEntityID());
-					const location = player.getLocation();
-					const position = location.getPosition();
-					writer.write(Type.INTEGER, position.x);
-					writer.write(Type.INTEGER, position.y);
-					writer.write(Type.INTEGER, position.z);
-					writer.write(Type.BYTE, location.getYaw());
-					writer.write(Type.BYTE, location.getPitch());
-					await connection.write(writer.build());
-				}
+				// player.teleport(connection);
 			}
+
+			// await this.overworld.tick();
+			// await this.nether.tick();
+			// await this.the_end.tick();
 
 			// NOTE: ass
 			for await (const [_, otherConnection] of this.connections) {

@@ -1,35 +1,39 @@
 import { DimensionType } from "./types.ts";
 
 export class Vec2d {
-    constructor(public readonly x: number, public readonly y: number) {}
+	constructor(public readonly x: number, public readonly y: number) {}
 }
 
 export class Vec3d {
-    constructor(public readonly x: number, public readonly y: number, public readonly z: number) {}
+	constructor(public readonly x: number, public readonly y: number, public readonly z: number) {}
+}
+
+export function toAbsolutePosition(coord: number) {
+	return coord * 32.0;
+}
+
+export function toAbsoluteRotation(rotation: number) {
+	return rotation * 256 / 360;
 }
 
 export class Location {
-    private _dimension: DimensionType;
-    private _position: Vec3d;
-    private _yaw: number;
-    private _pitch: number;
+	private _dimension: DimensionType;
+	private _position: Vec3d;
 
-    constructor(dimension: DimensionType, position: Vec3d, yaw: number, pitch: number) {
-        this._dimension = dimension;
-        this._position = position;
-        this._yaw = yaw;
-        this._pitch = pitch;
-    }
+	constructor(dimension: DimensionType, position: Vec3d) {
+		this._dimension = dimension;
+		this._position = position;
+	}
 
-    getDimensionType() { return this._dimension; }
+	getDimensionType() {
+		return this._dimension;
+	}
 
-    getPosition() { return this._position; }
+	getPosition() {
+		return this._position;
+	}
 
-    getYaw() { return this._yaw; }
-
-    setYaw(yaw: number) { this._yaw = yaw; }
-    
-    getPitch() { return this._pitch; }
-    
-    setPitch(pitch: number) { this._pitch = pitch; }
+	setPosition(position: Vec3d) {
+		this._position = position;
+	}
 }
