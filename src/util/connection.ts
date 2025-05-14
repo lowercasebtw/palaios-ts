@@ -243,6 +243,7 @@ export default class ClientConnection {
 				const z = Types.DOUBLE.read(reader);
 				const on_ground = Types.BOOLEAN.read(reader);
 
+				this.player.setLastLocation(this.player.getLocation());
 				this.player.getLocation().setPosition(new Vec3d(x, y, z));
 				this.player.setOnGround(on_ground);
 				break;

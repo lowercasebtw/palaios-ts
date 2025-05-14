@@ -46,10 +46,17 @@ export class Server extends EventEmitter {
 
 		this.emit("listen", undefined);
 		for await (const connection of this.listener) {
-			const client = new Client(connection);
 			try {
+				const client = new Client(connection);
 				this.emit("connect", client);
-				await client.listenForData();
+				// Don't await, so that other clients can connect
+				(async () => {
+					try {
+						await client.listenForData();
+					} catch (error) {
+						this.emit("error", error);
+					}
+				})();
 			} catch (error) {
 				this.emit("error", error);
 			}
