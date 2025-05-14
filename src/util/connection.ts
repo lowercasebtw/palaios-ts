@@ -1,5 +1,4 @@
 import * as pako from "https://deno.land/x/pako@v2.0.3/pako.js";
-import { Client, Packet } from "https://deno.land/x/tcp_socket@0.0.1/mods.ts";
 import { Player } from "../game/entity/Player.ts";
 import { Level, Logger } from "../logger/Logger.ts";
 import {
@@ -11,18 +10,17 @@ import {
 	writePacketString,
 } from "../packet.ts";
 import MinecraftServer from "../server.ts";
-import { ByteReader, ByteWriter, Type } from "../util/byte.ts";
-import { colorMessage } from "../util/color.ts";
-import { Vec3d } from "../util/mth.ts";
+import Types, { ReadableBuffer, WritableBuffer } from "../util/byte.ts";
+import { colorMessage } from "./color.ts";
+import { Vec3d } from "./mth.ts";
 import { Gamemode, WorldType } from "./types.ts";
 import { fetchUUID } from "./util.ts";
+import { Client, Packet } from "./tcp.ts";
 
 export default class ClientConnection {
 	private static LAST_CONNECTION_ID = 0;
-
 	public readonly id: number;
-
-	private client: Client;
+	private readonly client: Client;
 	private player: Player | null;
 
 	public constructor(client: Client) {
@@ -41,25 +39,27 @@ export default class ClientConnection {
 
 	async handle(server: MinecraftServer, packet: Packet) {
 		// handle packet data
-		const reader = new ByteReader(packet.data);
-		const packet_id = reader.read(Type.BYTE) as number;
+		const reader = new ReadableBuffer(packet.data);
+		const packet_id = Types.BYTE.read(reader) as number;
 		switch (packet_id) {
 			case PacketType.KEEP_ALIVE: {
-				const writer = new ByteWriter();
-				writer.write(Type.BYTE, PacketType.KEEP_ALIVE);
-				writer.write(Type.INTEGER, reader.read(Type.INTEGER) as number);
+				const writer = new WritableBuffer();
+				Types.BYTE.write(writer, PacketType.KEEP_ALIVE);
+				Types.INTEGER.write(writer, Types.INTEGER.read(reader));
 				await this.client.write(writer.build());
 				break;
 			}
 
 			case PacketType.LOGIN_REQUEST: {
-				if (server.getOnlinePlayerCount() >= server.getMaxPlayerCount()) {
+				if (
+					server.getOnlinePlayerCount() >= server.getMaxPlayerCount()
+				) {
 					await sendKickPacket(this.client, "The server is full!");
 					return;
 				}
 
 				// Login Request
-				const protocol_id = reader.read(Type.INTEGER) as number;
+				const protocol_id = Types.INTEGER.read(reader);
 				const username = readPacketString(reader);
 
 				if (protocol_id != ProtocolVersion.v1_2_4_to_1_2_5) {
@@ -72,15 +72,20 @@ export default class ClientConnection {
 
 				const uuid = await fetchUUID(username);
 				if (uuid === null && server.isOnlineMode()) {
-					console.log(`id=${this.id} username='${username}', uuid='${uuid}'`);
-					await sendKickPacket(this.client, `Failed to login, invalid uuid.`);
+					console.log(
+						`id=${this.id} username='${username}', uuid='${uuid}'`,
+					);
+					await sendKickPacket(
+						this.client,
+						`Failed to login, invalid uuid.`,
+					);
 					return;
 				}
 
 				this.player = new Player(username, uuid);
 				await this.sendLoginRequestPacket(server);
 				await this.sendPlayerPosition();
-				server.onPlayerJoin(this);
+				await server.onPlayerJoin(this);
 				// TODO: player abilities
 				// TODO: chunks
 				// await server.sendChunks(this.client);
@@ -89,36 +94,37 @@ export default class ClientConnection {
 					for (let chunk_z = -4; chunk_z < 4; ++chunk_z) {
 						{
 							// Chunk Allocation
-							const writer = new ByteWriter();
-							writer.write(Type.BYTE, PacketType.PRE_CHUNK);
-							writer.write(Type.INTEGER, chunk_x);
-							writer.write(Type.INTEGER, chunk_z);
-							writer.write(Type.BOOLEAN, true);
+							const writer = new WritableBuffer();
+							Types.BYTE.write(writer, PacketType.PRE_CHUNK);
+							Types.INTEGER.write(writer, chunk_x);
+							Types.INTEGER.write(writer, chunk_z);
+							Types.BOOLEAN.write(writer, true);
 							await this.client.write(writer.build());
 						}
 
 						{
 							// Chunk Data
 							const blocks = new Uint8Array(
-								new Uint8Array(16 * 256 * 16).map((_) => Math.floor(Math.random() * 4)),
+								new Uint8Array(16 * 256 * 16).map((_) =>
+									Math.floor(Math.random() * 4)
+								),
 							);
 							const compressed = pako.deflate(blocks);
 
 							// Chunk Data Packet
 							if (compressed) {
 								// this.sendMessage("Sending chunk with size: " + compressed.length);
-								const writer = new ByteWriter();
-								writer.write(Type.BYTE, PacketType.CHUNK_DATA);
-								writer.write(Type.INTEGER, chunk_x); // Chunk X
-								writer.write(Type.INTEGER, chunk_z); // Chunk Z
-								writer.write(Type.BOOLEAN, true); // Ground-up continuous
-								writer.write(Type.SHORT, 15); // primary bitmap (Bitmask with 1 for every 16x16x16 section which data follows in the compressed data.)
-								writer.write(Type.SHORT, 0); // add bitmap
-								writer.write(Type.INTEGER, compressed.length); // size of compressed data
-								writer.write(Type.INTEGER, 0); // unused?
-
+								const writer = new WritableBuffer();
+								Types.BYTE.write(writer, PacketType.CHUNK_DATA);
+								Types.INTEGER.write(writer, chunk_x); // Chunk X
+								Types.INTEGER.write(writer, chunk_z); // Chunk Z
+								Types.BOOLEAN.write(writer, true); // Ground-up continuous
+								Types.SHORT.write(writer, 15); // primary bitmap (Bitmask with 1 for every 16x16x16 section which data follows in the compressed data.)
+								Types.SHORT.write(writer, 0); // add bitmap
+								Types.INTEGER.write(writer, compressed.length); // size of compressed data
+								Types.INTEGER.write(writer, 0); // unused?
 								for (let i = 0; i < compressed.length; ++i) {
-									writer.write(Type.BYTE, compressed[i]);
+									Types.BYTE.write(writer, compressed[i]);
 								}
 
 								await this.client.write(writer.build());
@@ -159,33 +165,52 @@ export default class ClientConnection {
 					const cmd = parts.shift();
 					switch (cmd) {
 						case "time":
-							await this.sendMessage("The time in ticks is: " + server.getTime());
-							await this.sendMessage("Is it day? " + server.isDay());
-							await this.sendMessage("Is it night? " + server.isNight());
+							await this.sendMessage(
+								"The time in ticks is: " + server.getTime(),
+							);
+							await this.sendMessage(
+								"Is it day? " + server.isDay(),
+							);
+							await this.sendMessage(
+								"Is it night? " + server.isNight(),
+							);
 							break;
 						case "kick":
 							if (parts.length > 0) {
 								const name = parts.shift() as string;
 								await this.sendMessage(`Kicking ${name}!`);
-								const them = server.getConnectionByUsername(name);
+								const them = server.getConnectionByUsername(
+									name,
+								);
 								if (them != null) {
-									sendKickPacket(them.getClient(), "You have been kicked!");
+									sendKickPacket(
+										them.getClient(),
+										"You have been kicked!",
+									);
 								} else {
-									await this.sendMessage(`Failed to kick ${name}!`);
+									await this.sendMessage(
+										`Failed to kick ${name}!`,
+									);
 								}
 							} else {
-								await this.sendMessage("You must provide someones ign to kick!");
+								await this.sendMessage(
+									"You must provide someones ign to kick!",
+								);
 							}
 
 							break;
 						default:
-							await this.sendMessage(colorMessage("&cUnknown command."));
+							await this.sendMessage(
+								colorMessage("&cUnknown command."),
+							);
 							break;
 					}
 					return;
 				}
 
-				await server.broadcast(`<${this.player.getUsername()}> ${message}`);
+				await server.broadcast(
+					`<${this.player.getUsername()}> ${message}`,
+				);
 				break;
 			}
 
@@ -194,7 +219,8 @@ export default class ClientConnection {
 					await sendKickPacket(this.client, "Player is null");
 					return;
 				}
-				this.player.setOnGround(reader.read(Type.BOOLEAN) as boolean);
+
+				this.player.setOnGround(Types.BOOLEAN.read(reader));
 				break;
 			}
 
@@ -205,17 +231,17 @@ export default class ClientConnection {
 				}
 
 				// Player Position
-				const x = reader.read(Type.DOUBLE) as number;
-				const y = reader.read(Type.DOUBLE) as number;
-				const stance = reader.read(Type.DOUBLE) as number;
+				const x = Types.DOUBLE.read(reader);
+				const y = Types.DOUBLE.read(reader);
+				const stance = Types.DOUBLE.read(reader);
 
 				if (stance - y < 0.1 || stance - y > 1.65) {
 					await sendKickPacket(this.client, "Invalid stance");
 					return;
 				}
 
-				const z = reader.read(Type.DOUBLE) as number;
-				const on_ground = reader.read(Type.BOOLEAN) as boolean;
+				const z = Types.DOUBLE.read(reader);
+				const on_ground = Types.BOOLEAN.read(reader);
 
 				this.player.getLocation().setPosition(new Vec3d(x, y, z));
 				this.player.setOnGround(on_ground);
@@ -229,9 +255,9 @@ export default class ClientConnection {
 				}
 
 				// Player Look
-				const yaw = reader.read(Type.FLOAT) as number;
-				const pitch = reader.read(Type.FLOAT) as number;
-				const on_ground = reader.read(Type.BOOLEAN) as boolean;
+				const yaw = Types.FLOAT.read(reader);
+				const pitch = Types.FLOAT.read(reader);
+				const on_ground = Types.BOOLEAN.read(reader);
 
 				this.player.setYaw(yaw);
 				this.player.setPitch(pitch);
@@ -246,19 +272,19 @@ export default class ClientConnection {
 				}
 
 				// Player Position Look
-				const x = reader.read(Type.DOUBLE) as number;
-				const y = reader.read(Type.DOUBLE) as number;
-				const stance = reader.read(Type.DOUBLE) as number;
+				const x = Types.DOUBLE.read(reader);
+				const y = Types.DOUBLE.read(reader);
+				const stance = Types.DOUBLE.read(reader);
 
 				if (stance - y < 0.1 || stance - y > 1.65) {
 					await sendKickPacket(this.client, "Invalid stance");
 					return;
 				}
 
-				const z = reader.read(Type.DOUBLE) as number;
-				const yaw = reader.read(Type.FLOAT) as number;
-				const pitch = reader.read(Type.FLOAT) as number;
-				const on_ground = reader.read(Type.BOOLEAN) as boolean;
+				const z = Types.DOUBLE.read(reader);
+				const yaw = Types.FLOAT.read(reader);
+				const pitch = Types.FLOAT.read(reader);
+				const on_ground = Types.BOOLEAN.read(reader);
 
 				this.player.setLastLocation(this.player.getLocation());
 				this.player.getLocation().setPosition(new Vec3d(x, y, z));
@@ -275,22 +301,20 @@ export default class ClientConnection {
 			case PacketType.PLAYER_ABILITIES: {
 				if (this.player == null) return;
 
-				// NOTE: I don't think i'm doing this right, might need to send abilities
-				// on join?
-				const invulnerable = reader.read(Type.BOOLEAN) as boolean;
-				const is_flying = reader.read(Type.BOOLEAN) as boolean;
-				const can_fly = reader.read(Type.BOOLEAN) as boolean;
-				const instant_destroy = reader.read(Type.BOOLEAN) as boolean;
+				const invulnerable = Types.BOOLEAN.read(reader);
+				const is_flying = Types.BOOLEAN.read(reader);
+				const can_fly = Types.BOOLEAN.read(reader);
+				const instant_destroy = Types.BOOLEAN.read(reader);
 
-				const is_creative = this.player.getGamemode() == Gamemode.CREATIVE;
+				const is_creative =
+					this.player.getGamemode() == Gamemode.CREATIVE;
 				console.log("is c", is_creative);
-				const writer = new ByteWriter();
-				writer.write(Type.BYTE, PacketType.PLAYER_ABILITIES);
-				writer.write(Type.BOOLEAN, is_creative); // Invulnerability
-				writer.write(Type.BOOLEAN, is_flying); // Is flying
-				writer.write(Type.BOOLEAN, is_creative); // Can fly
-				writer.write(Type.BOOLEAN, is_creative); // Instant Destroy
-
+				const writer = new WritableBuffer();
+				Types.BYTE.write(writer, PacketType.PLAYER_ABILITIES);
+				Types.BOOLEAN.write(writer, invulnerable); // Invulnerability
+				Types.BOOLEAN.write(writer, is_flying); // Is flying
+				Types.BOOLEAN.write(writer, can_fly); // Can fly
+				Types.BOOLEAN.write(writer, instant_destroy); // Instant Destroy
 				await this.client.write(writer.build());
 				break;
 			}
@@ -298,9 +322,12 @@ export default class ClientConnection {
 			case PacketType.PLUGIN_MESSAGE: {
 				// Plugin Message
 				const channel = readPacketString(reader);
-				const byte_len = reader.read(Type.SHORT) as number;
+				const byte_len = Types.SHORT.read(reader);
 				// const bytes = reader.read_bytes(byte_len);
-				Logger.log(Level.INFO, `Got Plugin Message ('${channel}') [ ...${byte_len} bytes ]`);
+				Logger.log(
+					Level.INFO,
+					`Got Plugin Message ('${channel}') [ ...${byte_len} bytes ]`,
+				);
 				break;
 			}
 
@@ -314,12 +341,17 @@ export default class ClientConnection {
 			}
 
 			case PacketType.KICK_DISCONNECT: {
-				server.onPlayerLeave(this);
+				await server.onPlayerLeave(this);
 				break;
 			}
 
 			default: {
-				Logger.log(Level.WARNING, `TODO: Handle packet (${packet_id}) ${PacketType[packet_id]}`);
+				Logger.log(
+					Level.WARNING,
+					`TODO: Handle packet (${packet_id}) ${
+						PacketType[packet_id]
+					}`,
+				);
 				break;
 			}
 		}
@@ -331,36 +363,36 @@ export default class ClientConnection {
 
 	async sendLoginRequestPacket(server: MinecraftServer) {
 		if (this.player == null) return; // erm no this shouldnt happen
-		const writer = new ByteWriter();
-		writer.write(Type.BYTE, PacketType.LOGIN_REQUEST);
-		writer.write(Type.INTEGER, ProtocolVersion.v1_2_4_to_1_2_5);
+		const writer = new WritableBuffer();
+		Types.BYTE.write(writer, PacketType.LOGIN_REQUEST);
+		Types.INTEGER.write(writer, ProtocolVersion.v1_2_4_to_1_2_5);
 		writePacketString(writer, this.player.getUsername());
 		writePacketString(writer, WorldType.DEFAULT);
-		writer.write(Type.INTEGER, this.player.getGamemode());
-		writer.write(Type.INTEGER, server.getDifficulty());
-		writer.write(Type.BYTE, server.getDifficulty());
-		writer.write(Type.BYTE, 256); // World Height?
-		writer.write(Type.BYTE, 10); // Tab List Count?
+		Types.INTEGER.write(writer, this.player.getGamemode());
+		Types.INTEGER.write(writer, server.getDifficulty());
+		Types.BYTE.write(writer, server.getDifficulty());
+		Types.BYTE.write(writer, 256); // World Height?
+		Types.BYTE.write(writer, 10); // Tab List Count?
 		await this.client.write(writer.build());
 	}
 
 	async sendPlayerPosition() {
 		// Should this happen?
 		if (this.player == null) return;
-		const writer = new ByteWriter();
-		writer.write(Type.BYTE, PacketType.PLAYER_POSITION);
+		const writer = new WritableBuffer();
+		Types.BYTE.write(writer, PacketType.PLAYER_POSITION);
 		const position = this.player.getLocation().getPosition();
-		writer.write(Type.DOUBLE, position.x);
-		writer.write(Type.DOUBLE, position.y);
-		writer.write(Type.DOUBLE, 0);
-		writer.write(Type.DOUBLE, position.z);
-		writer.write(Type.BYTE, this.player.isOnGround() == true ? 1 : 0);
+		Types.DOUBLE.write(writer, position.x);
+		Types.DOUBLE.write(writer, position.y);
+		Types.DOUBLE.write(writer, 0);
+		Types.DOUBLE.write(writer, position.z);
+		Types.BYTE.write(writer, this.player.isOnGround() == true ? 1 : 0);
 		await this.client.write(writer.build());
 	}
 
 	async sendMessage(message: string) {
-		const writer = new ByteWriter();
-		writer.write(Type.BYTE, PacketType.CHAT_MESSAGE);
+		const writer = new WritableBuffer();
+		Types.BYTE.write(writer, PacketType.CHAT_MESSAGE);
 		writePacketString(writer, message);
 		await this.client.write(writer.build());
 	}
@@ -368,22 +400,22 @@ export default class ClientConnection {
 	async sendHealthUpdate() {
 		// Should this happen?
 		if (this.player == null) return;
-		const writer = new ByteWriter();
-		writer.write(Type.BYTE, PacketType.UPDATE_HEALTH);
-		writer.write(Type.SHORT, this.player.getHealth());
-		writer.write(Type.SHORT, this.player.getHungerLevel());
-		writer.write(Type.FLOAT, this.player.getSaturation());
+		const writer = new WritableBuffer();
+		Types.BYTE.write(writer, PacketType.UPDATE_HEALTH);
+		Types.SHORT.write(writer, this.player.getHealth());
+		Types.SHORT.write(writer, this.player.getHungerLevel());
+		Types.FLOAT.write(writer, this.player.getSaturation());
 		await this.client.write(writer.build());
 	}
 
 	async sendTabListUpdate(other: ClientConnection, remove: boolean = false) {
 		// Should this happen?
 		if (this.player == null || other.getPlayer() == null) return;
-		const writer = new ByteWriter();
-		writer.write(Type.BYTE, PacketType.PLAYER_LIST_ITEM);
+		const writer = new WritableBuffer();
+		Types.BYTE.write(writer, PacketType.PLAYER_LIST_ITEM);
 		writePacketString(writer, other.getPlayer()!.getUsername());
-		writer.write(Type.BOOLEAN, !remove); // false to remove
-		writer.write(Type.SHORT, 0); // TODO: Ping
+		Types.BOOLEAN.write(writer, !remove); // false to remove
+		Types.SHORT.write(writer, 0); // TODO: Ping
 		await this.client.write(writer.build());
 	}
 

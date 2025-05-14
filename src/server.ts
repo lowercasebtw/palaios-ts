@@ -1,27 +1,32 @@
-import { Client, Packet, Server } from "https://deno.land/x/tcp_socket@0.0.1/mods.ts";
+import { Client, Packet, Server } from "./util/tcp.ts";
 import World from "./game/dimension/World.ts";
 import { Entity } from "./game/entity/Entity.ts";
 import { EntityType } from "./game/entity/EntityType.ts";
 import { Player } from "./game/entity/Player.ts";
 import { Level, Logger } from "./logger/Logger.ts";
 import { PacketType } from "./packet.ts";
-import { ByteWriter, Type } from "./util/byte.ts";
+import Types, { WritableBuffer } from "./util/byte.ts";
 import { colorMessage, stripColor } from "./util/color.ts";
 import ClientConnection from "./util/connection.ts";
 import { toAbsolutePosition, toAbsoluteRotation } from "./util/mth.ts";
-import { Difficulty, DimensionType, ServerProperties, WorldType } from "./util/types.ts";
+import {
+	Difficulty,
+	DimensionType,
+	ServerProperties,
+	WorldType,
+} from "./util/types.ts";
 
 export default class MinecraftServer {
 	private server!: Server;
 
-	private entities: Entity[];
-	private connections: Map<Client, ClientConnection>;
+	private readonly entities: Entity[];
+	private readonly connections: Map<Client, ClientConnection>;
 
-	private difficulty: Difficulty;
-	private world_type: WorldType;
-	private overworld: World;
-	private nether: World;
-	private the_end: World;
+	private readonly difficulty: Difficulty;
+	private readonly world_type: WorldType;
+	private readonly overworld: World;
+	private readonly nether: World;
+	private readonly the_end: World;
 
 	private time: number;
 
@@ -36,9 +41,21 @@ export default class MinecraftServer {
 		this.connections = new Map();
 		this.difficulty = Difficulty.PEACEFUL;
 		this.world_type = WorldType.DEFAULT;
-		this.overworld = new World("worlds/world", DimensionType.OVERWORLD, WorldType.DEFAULT);
-		this.nether = new World("worlds/nether", DimensionType.NETHER, WorldType.DEFAULT);
-		this.the_end = new World("worlds/end", DimensionType.THE_END, WorldType.DEFAULT);
+		this.overworld = new World(
+			"worlds/world",
+			DimensionType.OVERWORLD,
+			WorldType.DEFAULT,
+		);
+		this.nether = new World(
+			"worlds/nether",
+			DimensionType.NETHER,
+			WorldType.DEFAULT,
+		);
+		this.the_end = new World(
+			"worlds/end",
+			DimensionType.THE_END,
+			WorldType.DEFAULT,
+		);
 
 		this.time = 0;
 
@@ -47,13 +64,17 @@ export default class MinecraftServer {
 		if (address != null) this.properties.address = address;
 		if (port != null) this.properties.port = port;
 
-		this.tick_interval = setInterval(() => {
-			try {
-				this.tick();
-			} catch (error: unknown) {
-				Logger.log(Level.WARNING, "An error has occured when ticking! " + (error as Error).message);
-			}
-		}, 1000 / this.ticks_per_second);
+		// this.tick_interval = setInterval(() => {
+		// 	try {
+		// 		this.tick();
+		// 	} catch (error: unknown) {
+		// 		Logger.log(
+		// 			Level.WARNING,
+		// 			"An error has occured when ticking! " +
+		// 				(error as Error).message,
+		// 		);
+		// 	}
+		// }, 1000 / this.ticks_per_second);
 	}
 
 	private load_properties(): ServerProperties {
@@ -61,7 +82,8 @@ export default class MinecraftServer {
 		try {
 			data = Deno.readTextFileSync("./server.properties");
 			// deno-lint-ignore no-unused-vars no-empty
-		} catch (e) {}
+		} catch (e) {
+		}
 
 		const properties: ServerProperties = {
 			level_seed: 0,
@@ -80,7 +102,10 @@ export default class MinecraftServer {
 			if (parts.length < 2) continue;
 
 			const key = parts[0].replace("-", "_");
-			if (!(key in properties) && key != "server_ip" && key != "server_port") {
+			if (
+				!(key in properties) && key != "server_ip" &&
+				key != "server_port"
+			) {
 				// invalid key
 				continue;
 			}
@@ -104,22 +129,28 @@ export default class MinecraftServer {
 	}
 
 	async listen() {
-		this.server = new Server({
-			hostname: this.properties.address,
-			port: this.properties.port,
-		});
+		this.server = new Server(this.properties.address, this.properties.port);
 
-		this.server.on("listen", () =>
-			Logger.log(Level.INFO, `Listening on ${this.properties.address}:${this.properties.port}`),
+		this.server.on(
+			"listen",
+			() =>
+				Logger.log(
+					Level.INFO,
+					`Listening on ${this.properties.address}:${this.properties.port}`,
+				),
 		);
 
 		this.server.on("connect", (client: Client) => {
 			const connection = new ClientConnection(client);
 			this.connections.set(client, connection);
 			Logger.log(Level.INFO, `Client ${connection.id} connected!`);
-			client.addListener("receive", (_, packet: Packet) => connection.handle(this, packet));
-			client.addListener("close", () => {
+			client.on(
+				"receive",
+				(_, packet: Packet) => connection.handle(this, packet),
+			);
+			client.on("close", (reason: string) => {
 				Logger.log(Level.INFO, `Client ${connection.id} disconnected!`);
+				Logger.log(Level.INFO, "Reason: " + reason);
 				// TODO: cleanup?
 				this.connections.get(client)!.close();
 				this.connections.delete(client);
@@ -129,33 +160,35 @@ export default class MinecraftServer {
 		await this.server.listen();
 	}
 
-	onPlayerJoin(newConnection: ClientConnection) {
-		const msg = colorMessage(`&e${newConnection.getPlayer()!.getUsername()} has joined`);
-		this.broadcast(msg);
+	async onPlayerJoin(newConnection: ClientConnection) {
+		const msg = colorMessage(
+			`&e${newConnection.getPlayer()!.getUsername()} has joined`,
+		);
+		await this.broadcast(msg);
 		Logger.log(Level.INFO, stripColor(msg));
-
-		for (const [_, otherConnection] of this.connections) {
+		for await (const [_, otherConnection] of this.connections) {
 			if (otherConnection.getPlayer() == null) continue; // wtf?
 			// Don't spawn if you
 			if (otherConnection != newConnection) {
 				// Spawn new player for others
-				newConnection.getPlayer()!.spawn(otherConnection);
+				await newConnection.getPlayer()!.spawn(otherConnection);
 				// spawn others for new player?
-				otherConnection.getPlayer()!.spawn(newConnection);
+				await otherConnection.getPlayer()!.spawn(newConnection);
 			}
 		}
 	}
 
-	onPlayerLeave(connection: ClientConnection) {
-		const msg = colorMessage(`&e${connection.getPlayer()!.getUsername()} left`);
-		this.broadcast(msg);
+	async onPlayerLeave(connection: ClientConnection) {
+		const msg = colorMessage(
+			`&e${connection.getPlayer()!.getUsername()} left`,
+		);
+		await this.broadcast(msg);
 		Logger.log(Level.INFO, stripColor(msg));
-
-		for (const [_, otherConnection] of this.connections) {
-			otherConnection.sendTabListUpdate(connection, true);
+		for await (const [_, otherConnection] of this.connections) {
+			await otherConnection.sendTabListUpdate(connection, true);
 			const player = connection.getPlayer();
 			if (player != null) {
-				player.remove(otherConnection);
+				await player.remove(otherConnection);
 			}
 		}
 	}
@@ -167,66 +200,49 @@ export default class MinecraftServer {
 				const prevLocation = player.getLastLocation();
 				const currentLocation = player.getLocation();
 				if (prevLocation != null) {
-					const writer = new ByteWriter();
-					writer.write(Type.BYTE, PacketType.REL_ENTITY_MOVE_LOOK);
-					writer.write(Type.INTEGER, player.getEntityID());
+					const writer = new WritableBuffer();
+					Types.BYTE.write(writer, PacketType.REL_ENTITY_MOVE_LOOK);
+					Types.INTEGER.write(writer, player.getEntityID());
 					const oldPos = prevLocation.getPosition();
 					const newPos = currentLocation.getPosition();
 
 					const nx = newPos.x - oldPos.x;
 					const ny = newPos.y - oldPos.y;
 					const nz = newPos.z - oldPos.z;
-					console.log(`Teleporting ${player.getUsername()} to ${nx} ${ny} ${nz}`);
+					player.setLastLocation(player.getLocation());
 
-					writer.write(Type.BYTE, toAbsolutePosition(nx));
-					writer.write(Type.BYTE, toAbsolutePosition(ny));
-					writer.write(Type.BYTE, toAbsolutePosition(nz));
-					writer.write(Type.BYTE, toAbsoluteRotation(player.getYaw()));
-					writer.write(Type.BYTE, toAbsoluteRotation(player.getPitch()));
+					Types.BYTE.write(writer, toAbsolutePosition(nx));
+					Types.BYTE.write(writer, toAbsolutePosition(ny));
+					Types.BYTE.write(writer, toAbsolutePosition(nz));
+					Types.BYTE.write(
+						writer,
+						toAbsoluteRotation(player.getYaw()),
+					);
+					Types.BYTE.write(
+						writer,
+						toAbsoluteRotation(player.getPitch()),
+					);
 					await otherConnection.write(writer.build());
 				}
 			}
 		}
 	}
 
-	getConnections() {
-		return this.connections;
-	}
-
-	getPlayerByUsername(username: string) {
-		let player = null;
-		for (const [_, connection] of this.connections) {
-			if (connection.getPlayer() == null) {
-				continue;
-			} else {
-				if (connection.getPlayer()!.getUsername() == username) {
-					player = connection.getPlayer();
-				}
-			}
-		}
-		return player;
-	}
-
 	getConnectionByUsername(username: string) {
 		let _connection = null;
 		for (const [_, connection] of this.connections) {
-			if (connection.getPlayer() == null) {
-				continue;
-			} else {
+			if (connection.getPlayer() != null) {
 				if (connection.getPlayer()!.getUsername() == username) {
 					_connection = connection;
 				}
 			}
 		}
+
 		return _connection;
 	}
 
 	getDifficulty() {
 		return this.difficulty;
-	}
-
-	getWorldType() {
-		return this.world_type;
 	}
 
 	getMessageOfTheDay() {
@@ -240,6 +256,7 @@ export default class MinecraftServer {
 				online++;
 			}
 		}
+
 		return online;
 	}
 
@@ -251,33 +268,12 @@ export default class MinecraftServer {
 		return this.properties.max_players;
 	}
 
-	// horrid
-	getOverworld() {
-		return this.overworld;
-	}
-
-	getNether() {
-		return this.nether;
-	}
-
-	getTheEnd() {
-		return this.the_end;
-	}
-
-	// Entity Stuff
-	getEntities() {
-		return this.entities;
-	}
-
-	addEntity(entity: Entity) {
-		// horrid
-		this.entities.push(entity);
-	}
-
 	getPlayerWithUUID(uuid: string) {
 		// horrid
 		const players = this.getEntitiesOf(EntityType.PLAYER);
-		const it = players.find((player) => (player as Player).getUUID() === uuid);
+		const it = players.find((player) =>
+			(player as Player).getUUID() === uuid
+		);
 		if (!it) return null;
 		return it as Player;
 	}
@@ -301,26 +297,27 @@ export default class MinecraftServer {
 
 	async broadcast(message: string) {
 		for (const [_, connection] of this.connections.entries()) {
-			if (connection.getPlayer() == null) continue; // player is null, possibly logging in
-			await connection.sendMessage(message);
+			// player is null, possibly logging in
+			if (connection.getPlayer() != null) {
+				await connection.sendMessage(message);
+			}
 		}
 
 		// Logger.log(Level.INFO, stripColor(message));
 	}
 
 	async sendKeepAlive(client: Client) {
-		await client.write(
-			new ByteWriter()
-				.write(Type.BYTE, PacketType.KEEP_ALIVE)
-				.write(Type.INTEGER, Math.floor(Math.random() * 10000))
-				.build(),
-		);
+		const writer = new WritableBuffer();
+		Types.BYTE.write(writer, PacketType.KEEP_ALIVE);
+		Types.INTEGER.write(writer, Math.floor(Math.random() * 10000));
+		await client.write(writer.build());
 	}
 
 	async sendTimeUpdate(client: Client) {
-		await client.write(
-			new ByteWriter().write(Type.BYTE, PacketType.UPDATE_TIME).write(Type.LONG, BigInt(this.time)).build(),
-		);
+		const writer = new WritableBuffer();
+		Types.BYTE.write(writer, PacketType.UPDATE_TIME);
+		Types.LONG.write(writer, BigInt(this.time));
+		await client.write(writer.build());
 	}
 
 	async tick() {
@@ -339,20 +336,20 @@ export default class MinecraftServer {
 				const player = otherConnection.getPlayer()!;
 
 				{
-					const writer = new ByteWriter();
-					writer.write(Type.BYTE, PacketType.ENTITY);
-					writer.write(Type.INTEGER, player.getEntityID());
+					// Add entity for others
+					const writer = new WritableBuffer();
+					Types.BYTE.write(writer, PacketType.ENTITY);
+					Types.INTEGER.write(writer, player.getEntityID());
 					await connection.write(writer.build());
 				}
 
 				// player.teleport(connection);
 			}
 
-			// await this.overworld.tick();
-			// await this.nether.tick();
-			// await this.the_end.tick();
+			await this.overworld.tick();
+			await this.nether.tick();
+			await this.the_end.tick();
 
-			// NOTE: ass
 			for await (const [_, otherConnection] of this.connections) {
 				await connection.sendTabListUpdate(otherConnection);
 			}

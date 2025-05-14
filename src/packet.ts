@@ -1,8 +1,8 @@
 // https://wiki.vg/index.php?title=Protocol&oldid=932
 
-import { Client } from "https://deno.land/x/tcp_socket@0.0.1/mods.ts";
+import { Client } from "./util/tcp.ts";
 import ItemStack from "../src/game/item/ItemStack.ts";
-import { ByteReader, ByteWriter, Type } from "../src/util/byte.ts";
+import Types, { ReadableBuffer, WritableBuffer } from "../src/util/byte.ts";
 import { generateHash } from "./util/hash.ts";
 
 export enum ProtocolVersion {
@@ -80,45 +80,55 @@ export enum PacketType {
 	KICK_DISCONNECT = 255,
 }
 
-export function writePacketString(writer: ByteWriter, message: string) {
-	writer.write(Type.SHORT, message.length);
+export function writePacketString(writer: WritableBuffer, message: string) {
+	Types.SHORT.write(writer, message.length);
 	for (let i = 0; i < message.length; ++i) {
-		writer.write(Type.SHORT, message[i].charCodeAt(0));
+		Types.SHORT.write(writer, message[i].charCodeAt(0));
 	}
+
 	return writer;
 }
 
-export function readPacketString(reader: ByteReader) {
-	const length = reader.read(Type.SHORT) as number;
+export function readPacketString(reader: ReadableBuffer) {
+	const length = Types.SHORT.read(reader) as number;
 	if (length === 0) return "";
 	let string = "";
-	for (let i = 0; i < length; ++i) string += String.fromCharCode(reader.read(Type.SHORT) as number);
+	for (let i = 0; i < length; ++i) {
+		string += String.fromCharCode(Types.SHORT.read(reader) as number);
+	}
 	return string;
 }
 
-export async function sendHandshakePacket(client: Client, isOnlineMode: boolean) {
-	const writer = new ByteWriter();
-	writer.write(Type.BYTE, PacketType.HANDSHAKE);
+export async function sendHandshakePacket(
+	client: Client,
+	isOnlineMode: boolean,
+) {
+	const writer = new WritableBuffer();
+	Types.BYTE.write(writer, PacketType.HANDSHAKE);
 	// TODO: Fix The Hash
 	writePacketString(writer, isOnlineMode ? generateHash() : "-");
 	await client.write(writer.build());
 }
 
-export async function sendWindowItemsPacket(client: Client, window_id: number, items: ItemStack[]) {
+export async function sendWindowItemsPacket(
+	client: Client,
+	window_id: number,
+	items: ItemStack[],
+) {
 	if (items.length < 44) return; // invalid
-	const writer = new ByteWriter();
-	writer.write(Type.BYTE, PacketType.SET_WINDOW_ITEMS);
-	writer.write(Type.BYTE, window_id);
-	writer.write(Type.SHORT, items.length);
+	const writer = new WritableBuffer();
+	Types.BYTE.write(writer, PacketType.SET_WINDOW_ITEMS);
+	Types.BYTE.write(writer, window_id);
+	Types.SHORT.write(writer, items.length);
 	for (const itemStack of items) {
-		writer.append(itemStack.bytes());
+		writer.write(...itemStack.bytes());
 	}
 	await client.write(writer.build());
 }
 
 export async function sendKickPacket(client: Client, reason: string) {
-	const writer = new ByteWriter();
-	writer.write(Type.BYTE, PacketType.KICK_DISCONNECT);
+	const writer = new WritableBuffer();
+	Types.BYTE.write(writer, PacketType.KICK_DISCONNECT);
 	writePacketString(writer, reason);
 	await client.write(writer.build());
 }

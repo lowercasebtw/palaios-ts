@@ -1,7 +1,7 @@
 export class Block {
-    public readonly id: number;
+	public readonly id: number;
 
-    constructor(id: number) {
-        this.id = id;
-    }
+	constructor(id: number) {
+		this.id = id;
+	}
 }

@@ -5,7 +5,11 @@ export class Vec2d {
 }
 
 export class Vec3d {
-	constructor(public readonly x: number, public readonly y: number, public readonly z: number) {}
+	constructor(
+		public readonly x: number,
+		public readonly y: number,
+		public readonly z: number,
+	) {}
 }
 
 export function toAbsolutePosition(coord: number) {

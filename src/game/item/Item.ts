@@ -1,4 +1,4 @@
-import { NBT_Compound } from "../../nbt/nbt.ts";
+import { NBT_Compound } from "../../util/nbt.ts";
 
 export default class Item {
     public readonly id: number;

@@ -7,10 +7,10 @@ import { EntityType } from "./EntityType.ts";
 export class Entity {
 	private static LAST_ENTITY_ID = 0;
 
-	private _id: number;
-	private _type: EntityType;
+	private readonly _id: number;
+	private readonly _type: EntityType;
 
-	private _inventory: Map<number, ItemStack>;
+	private readonly _inventory: Map<number, ItemStack>;
 	private _location: Location;
 	private _health: number;
 	private _yaw: number;
@@ -20,7 +20,10 @@ export class Entity {
 		this._id = Entity.LAST_ENTITY_ID++;
 		this._type = type;
 		this._inventory = new Map();
-		this._location = new Location(DimensionType.OVERWORLD, new Vec3d(0, 128, 0));
+		this._location = new Location(
+			DimensionType.OVERWORLD,
+			new Vec3d(0, 128, 0),
+		);
 		this._health = 20;
 		this._yaw = 0;
 		this._pitch = 0;

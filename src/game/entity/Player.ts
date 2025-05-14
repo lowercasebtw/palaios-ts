@@ -1,5 +1,5 @@
 import { PacketType, writePacketString } from "../../packet.ts";
-import { ByteWriter, Type } from "../../util/byte.ts";
+import Types, { WritableBuffer } from "../../util/byte.ts";
 import ClientConnection from "../../util/connection.ts";
 import { Location, toAbsoluteRotation } from "../../util/mth.ts";
 import { Gamemode } from "../../util/types.ts";
@@ -8,16 +8,16 @@ import { EntityType } from "./EntityType.ts";
 
 export class Player extends Entity {
 	// TODO: UUID class, because uuid is actually numbers
-	private _uuid: string | null;
-	private _username: string;
-	private _gamemode: Gamemode;
+	private readonly _uuid: string | null;
+	private readonly _username: string;
+	private readonly _gamemode: Gamemode;
 	private _on_ground: boolean;
 
-	private _hunger_bars: number;
-	private _saturation: number;
+	private readonly _hunger_bars: number;
+	private readonly _saturation: number;
 
-	private _experience_level: number;
-	private _experience_points: number;
+	private readonly _experience_level: number;
+	private readonly _experience_points: number;
 
 	private _last_location: Location | null;
 
@@ -94,25 +94,25 @@ export class Player extends Entity {
 	}
 
 	async spawn(connection: ClientConnection) {
-		const writer = new ByteWriter();
-		writer.write(Type.BYTE, PacketType.SPAWN_NAMED_ENTITY);
-		writer.write(Type.INTEGER, this.getEntityID());
+		const writer = new WritableBuffer();
+		Types.BYTE.write(writer, PacketType.SPAWN_NAMED_ENTITY);
+		Types.INTEGER.write(writer, this.getEntityID());
 		writePacketString(writer, this._username);
 		const location = this.getLocation();
 		const position = location.getPosition();
-		writer.write(Type.INTEGER, position.x);
-		writer.write(Type.INTEGER, position.y);
-		writer.write(Type.INTEGER, position.z);
-		writer.write(Type.BYTE, this.getYaw());
-		writer.write(Type.BYTE, this.getPitch());
-		writer.write(Type.SHORT, 0); // TODO: inventory
+		Types.INTEGER.write(writer, position.x);
+		Types.INTEGER.write(writer, position.y);
+		Types.INTEGER.write(writer, position.z);
+		Types.BYTE.write(writer, this.getYaw());
+		Types.BYTE.write(writer, this.getPitch());
+		Types.SHORT.write(writer, 0); // TODO: inventory
 		await connection.write(writer.build());
 	}
 
 	async remove(connection: ClientConnection) {
-		const writer = new ByteWriter();
-		writer.write(Type.BYTE, PacketType.DESTROY_ENTITY);
-		writer.write(Type.INTEGER, this.getEntityID());
+		const writer = new WritableBuffer();
+		Types.BYTE.write(writer, PacketType.DESTROY_ENTITY);
+		Types.INTEGER.write(writer, this.getEntityID());
 		await connection.write(writer.build());
 	}
 
@@ -122,14 +122,14 @@ export class Player extends Entity {
 		y: number = this.getY(),
 		z: number = this.getZ(),
 	) {
-		const writer = new ByteWriter();
-		writer.write(Type.BYTE, PacketType.REL_ENTITY_MOVE_LOOK);
-		writer.write(Type.INTEGER, this.getEntityID());
-		writer.write(Type.BYTE, toAbsoluteRotation(x));
-		writer.write(Type.BYTE, toAbsoluteRotation(y));
-		writer.write(Type.BYTE, toAbsoluteRotation(z));
-		writer.write(Type.BYTE, toAbsoluteRotation(this.getYaw()));
-		writer.write(Type.BYTE, toAbsoluteRotation(this.getPitch()));
+		const writer = new WritableBuffer();
+		Types.BYTE.write(writer, PacketType.REL_ENTITY_MOVE_LOOK);
+		Types.INTEGER.write(writer, this.getEntityID());
+		Types.BYTE.write(writer, toAbsoluteRotation(x));
+		Types.BYTE.write(writer, toAbsoluteRotation(y));
+		Types.BYTE.write(writer, toAbsoluteRotation(z));
+		Types.BYTE.write(writer, toAbsoluteRotation(this.getYaw()));
+		Types.BYTE.write(writer, toAbsoluteRotation(this.getPitch()));
 		await connection.write(writer.build());
 	}
 }
