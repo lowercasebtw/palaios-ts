@@ -10,6 +10,10 @@ export class Vec3d {
 		public readonly y: number,
 		public readonly z: number,
 	) {}
+
+	equals(other: Vec3d) {
+		return this.x === other.x && this.y === other.y && this.z === other.z;
+	}
 }
 
 export function toAbsolutePosition(coord: number) {
@@ -35,6 +39,10 @@ export class Location {
 
 	getPosition() {
 		return this._position;
+	}
+
+	withPosition(position: Vec3d) {
+		return new Location(this._dimension, position);
 	}
 
 	setPosition(position: Vec3d) {

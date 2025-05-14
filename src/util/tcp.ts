@@ -126,7 +126,10 @@ export class Client extends EventEmitter {
 		} catch (error) {
 			this.emit("error", error);
 			this.close((error as Error).message);
-			throw error;
+			// throw error;
 		}
+
+		// 0 70 17
+		// -2 132 17
 	}
 }

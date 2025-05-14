@@ -19,6 +19,8 @@ export class Entity {
 	private _yaw: number;
 	private _pitch: number;
 
+	private last_position: Vec3d;
+
 	public constructor(type: EntityType) {
 		this._id = Entity.LAST_ENTITY_ID++;
 		this._type = type;
@@ -30,6 +32,7 @@ export class Entity {
 		this._health = 20;
 		this._yaw = 0;
 		this._pitch = 0;
+		this.last_position = this._location.getPosition();
 	}
 
 	getEntityID() {
@@ -44,12 +47,17 @@ export class Entity {
 		return this._inventory;
 	}
 
-	getLocation() {
-		return this._location;
+	getPosition() {
+		return this._location.getPosition();
 	}
 
-	setLocation(location: Location) {
-		this._location = location;
+	setPosition(position: Vec3d) {
+		this.last_position = this._location.getPosition();
+		this._location = this._location.withPosition(position);
+	}
+
+	getLastPosition() {
+		return this.last_position;
 	}
 
 	getYaw() {

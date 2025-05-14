@@ -13,7 +13,7 @@ import MinecraftServer from "../server.ts";
 import Types, { ReadableBuffer, WritableBuffer } from "../util/byte.ts";
 import { colorMessage } from "./color.ts";
 import { Vec3d } from "./mth.ts";
-import { Gamemode, WorldType } from "./types.ts";
+import { WorldType } from "./types.ts";
 import { fetchUUID } from "./util.ts";
 import { Client, Packet } from "./tcp.ts";
 
@@ -22,11 +22,13 @@ export default class ClientConnection {
 	public readonly id: number;
 	private readonly client: Client;
 	private player: Player | null;
+	private last_keep_alive: number;
 
 	public constructor(client: Client) {
 		this.id = ClientConnection.LAST_CONNECTION_ID++;
 		this.client = client;
 		this.player = null;
+		this.last_keep_alive = 0;
 	}
 
 	getClient() {
@@ -37,12 +39,17 @@ export default class ClientConnection {
 		return this.player;
 	}
 
+	getLastKeepAlive() {
+		return this.last_keep_alive;
+	}
+
 	async handle(server: MinecraftServer, packet: Packet) {
 		// handle packet data
 		const reader = new ReadableBuffer(packet.data);
 		const packet_id = Types.BYTE.read(reader) as number;
 		switch (packet_id) {
 			case PacketType.KEEP_ALIVE: {
+				Logger.log(Level.INFO, "keep alive");
 				const writer = new WritableBuffer();
 				Types.BYTE.write(writer, PacketType.KEEP_ALIVE);
 				Types.INTEGER.write(writer, Types.INTEGER.read(reader));
@@ -214,7 +221,7 @@ export default class ClientConnection {
 				break;
 			}
 
-			case PacketType.FLYING: {
+			case PacketType.PLAYER: {
 				if (this.player === null) {
 					await sendKickPacket(this.client, "Player is null");
 					return;
@@ -243,9 +250,9 @@ export default class ClientConnection {
 				const z = Types.DOUBLE.read(reader);
 				const on_ground = Types.BOOLEAN.read(reader);
 
-				this.player.setLastLocation(this.player.getLocation());
-				this.player.getLocation().setPosition(new Vec3d(x, y, z));
+				this.player.setPosition(new Vec3d(x, y, z));
 				this.player.setOnGround(on_ground);
+				await server.updatePlayerPosition(this);
 				break;
 			}
 
@@ -263,6 +270,7 @@ export default class ClientConnection {
 				this.player.setYaw(yaw);
 				this.player.setPitch(pitch);
 				this.player.setOnGround(on_ground);
+				await server.updatePlayerPosition(this);
 				break;
 			}
 
@@ -287,8 +295,7 @@ export default class ClientConnection {
 				const pitch = Types.FLOAT.read(reader);
 				const on_ground = Types.BOOLEAN.read(reader);
 
-				this.player.setLastLocation(this.player.getLocation());
-				this.player.getLocation().setPosition(new Vec3d(x, y, z));
+				this.player.setPosition(new Vec3d(x, y, z));
 				this.player.setYaw(yaw);
 				this.player.setPitch(pitch);
 				this.player.setOnGround(on_ground);
@@ -307,9 +314,6 @@ export default class ClientConnection {
 				const can_fly = Types.BOOLEAN.read(reader);
 				const instant_destroy = Types.BOOLEAN.read(reader);
 
-				const is_creative =
-					this.player.getGamemode() == Gamemode.CREATIVE;
-				console.log("is c", is_creative);
 				const writer = new WritableBuffer();
 				Types.BYTE.write(writer, PacketType.PLAYER_ABILITIES);
 				Types.BOOLEAN.write(writer, invulnerable); // Invulnerability
@@ -382,7 +386,7 @@ export default class ClientConnection {
 		if (this.player == null) return;
 		const writer = new WritableBuffer();
 		Types.BYTE.write(writer, PacketType.PLAYER_POSITION);
-		const position = this.player.getLocation().getPosition();
+		const position = this.player.getPosition();
 		Types.DOUBLE.write(writer, position.x);
 		Types.DOUBLE.write(writer, position.y);
 		Types.DOUBLE.write(writer, 0);

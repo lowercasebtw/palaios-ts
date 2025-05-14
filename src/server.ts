@@ -59,17 +59,17 @@ export default class MinecraftServer {
 		if (address != null) this.properties.address = address;
 		if (port != null) this.properties.port = port;
 
-		// this.tick_interval = setInterval(() => {
-		// 	try {
-		// 		this.tick();
-		// 	} catch (error: unknown) {
-		// 		Logger.log(
-		// 			Level.WARNING,
-		// 			"An error has occured when ticking! " +
-		// 				(error as Error).message,
-		// 		);
-		// 	}
-		// }, 1000 / this.ticks_per_second);
+		this.tick_interval = setInterval(() => {
+			try {
+				this.tick();
+			} catch (error: unknown) {
+				Logger.log(
+					Level.WARNING,
+					"An error has occured when ticking! " +
+						(error as Error).message,
+				);
+			}
+		}, 1000 / this.ticks_per_second);
 	}
 
 	private load_properties(): ServerProperties {
@@ -192,19 +192,17 @@ export default class MinecraftServer {
 		for await (const [_, otherConnection] of this.connections) {
 			if (otherConnection != connection) {
 				const player = connection.getPlayer()!;
-				const prevLocation = player.getLastLocation();
-				const currentLocation = player.getLocation();
-				if (prevLocation != null) {
+				const oldPos = player.getLastPosition();
+				const newPos = player.getPosition();
+				if (!oldPos.equals(newPos)) {
 					const writer = new WritableBuffer();
 					Types.BYTE.write(writer, PacketType.REL_ENTITY_MOVE_LOOK);
 					Types.INTEGER.write(writer, player.getEntityID());
-					const oldPos = prevLocation.getPosition();
-					const newPos = currentLocation.getPosition();
 
 					const nx = newPos.x - oldPos.x;
 					const ny = newPos.y - oldPos.y;
 					const nz = newPos.z - oldPos.z;
-					player.setLastLocation(player.getLocation());
+					player.setPosition(player.getPosition());
 
 					Types.BYTE.write(writer, toAbsolutePosition(nx));
 					Types.BYTE.write(writer, toAbsolutePosition(ny));
@@ -338,7 +336,7 @@ export default class MinecraftServer {
 					await connection.getClient().write(writer.build());
 				}
 
-				// player.teleport(connection);
+				player.teleport(connection);
 			}
 
 			await this.overworld.tick();

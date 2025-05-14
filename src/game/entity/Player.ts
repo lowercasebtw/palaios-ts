@@ -1,7 +1,7 @@
 import { PacketType, writePacketString } from "../../packet.ts";
 import Types, { WritableBuffer } from "../../util/byte.ts";
 import ClientConnection from "../../util/connection.ts";
-import { Location, toAbsoluteRotation } from "../../util/mth.ts";
+import { toAbsoluteRotation } from "../../util/mth.ts";
 import { Gamemode } from "../../util/types.ts";
 import { Entity } from "./Entity.ts";
 import { EntityType } from "./EntityType.ts";
@@ -19,8 +19,6 @@ export class Player extends Entity {
 	private readonly experience_level: number;
 	private readonly experience_points: number;
 
-	private last_location: Location | null;
-
 	public constructor(
 		connection: ClientConnection,
 		username: string,
@@ -36,7 +34,6 @@ export class Player extends Entity {
 		this.saturation = 5;
 		this.experience_level = 0;
 		this.experience_points = 0;
-		this.last_location = null;
 	}
 
 	getUUID() {
@@ -44,18 +41,15 @@ export class Player extends Entity {
 	}
 
 	getX() {
-		const position = this.getLocation().getPosition();
-		return position.x;
+		return this.getPosition().x;
 	}
 
 	getY() {
-		const position = this.getLocation().getPosition();
-		return position.y;
+		return this.getPosition().y;
 	}
 
 	getZ() {
-		const position = this.getLocation().getPosition();
-		return position.z;
+		return this.getPosition().z;
 	}
 
 	getUsername() {
@@ -90,21 +84,12 @@ export class Player extends Entity {
 		return this.experience_points;
 	}
 
-	getLastLocation() {
-		return this.last_location;
-	}
-
-	setLastLocation(location: Location) {
-		this.last_location = location;
-	}
-
 	async spawn(connection: ClientConnection) {
 		const writer = new WritableBuffer();
 		Types.BYTE.write(writer, PacketType.SPAWN_NAMED_ENTITY);
 		Types.INTEGER.write(writer, this.getEntityID());
 		writePacketString(writer, this.username);
-		const location = this.getLocation();
-		const position = location.getPosition();
+		const position = this.getPosition();
 		Types.INTEGER.write(writer, position.x);
 		Types.INTEGER.write(writer, position.y);
 		Types.INTEGER.write(writer, position.z);
@@ -120,15 +105,15 @@ export class Player extends Entity {
 		y: number = this.getY(),
 		z: number = this.getZ(),
 	) {
-		const writer = new WritableBuffer();
-		Types.BYTE.write(writer, PacketType.REL_ENTITY_MOVE_LOOK);
-		Types.INTEGER.write(writer, this.getEntityID());
-		Types.BYTE.write(writer, toAbsoluteRotation(x));
-		Types.BYTE.write(writer, toAbsoluteRotation(y));
-		Types.BYTE.write(writer, toAbsoluteRotation(z));
-		Types.BYTE.write(writer, toAbsoluteRotation(this.getYaw()));
-		Types.BYTE.write(writer, toAbsoluteRotation(this.getPitch()));
-		await connection.getClient().write(writer.build());
+		// const writer = new WritableBuffer();
+		// Types.BYTE.write(writer, PacketType.REL_ENTITY_MOVE_LOOK);
+		// Types.INTEGER.write(writer, this.getEntityID());
+		// Types.BYTE.write(writer, toAbsoluteRotation(x));
+		// Types.BYTE.write(writer, toAbsoluteRotation(y));
+		// Types.BYTE.write(writer, toAbsoluteRotation(z));
+		// Types.BYTE.write(writer, toAbsoluteRotation(this.getYaw()));
+		// Types.BYTE.write(writer, toAbsoluteRotation(this.getPitch()));
+		// await connection.getClient().write(writer.build());
 	}
 
 	disconnect(message: string) {
