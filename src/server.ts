@@ -9,12 +9,7 @@ import Types, { WritableBuffer } from "./util/byte.ts";
 import { colorMessage, stripColor } from "./util/color.ts";
 import ClientConnection from "./util/connection.ts";
 import { toAbsolutePosition, toAbsoluteRotation } from "./util/mth.ts";
-import {
-	Difficulty,
-	DimensionType,
-	ServerProperties,
-	WorldType,
-} from "./util/types.ts";
+import { Difficulty, DimensionType, ServerProperties, WorldType } from "./util/types.ts";
 
 export default class MinecraftServer {
 	private server!: Server;
@@ -222,7 +217,7 @@ export default class MinecraftServer {
 						writer,
 						toAbsoluteRotation(player.getPitch()),
 					);
-					await otherConnection.write(writer.build());
+					await otherConnection.getClient().write(writer.build());
 				}
 			}
 		}
@@ -340,7 +335,7 @@ export default class MinecraftServer {
 					const writer = new WritableBuffer();
 					Types.BYTE.write(writer, PacketType.ENTITY);
 					Types.INTEGER.write(writer, player.getEntityID());
-					await connection.write(writer.build());
+					await connection.getClient().write(writer.build());
 				}
 
 				// player.teleport(connection);

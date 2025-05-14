@@ -82,7 +82,7 @@ export default class ClientConnection {
 					return;
 				}
 
-				this.player = new Player(username, uuid);
+				this.player = new Player(this, username, uuid);
 				await this.sendLoginRequestPacket(server);
 				await this.sendPlayerPosition();
 				await server.onPlayerJoin(this);
@@ -357,12 +357,12 @@ export default class ClientConnection {
 		}
 	}
 
-	close() {}
+	close() {
+	}
 
 	// Writing
-
 	async sendLoginRequestPacket(server: MinecraftServer) {
-		if (this.player == null) return; // erm no this shouldnt happen
+		if (this.player == null) return; // erm no this shouldn't happen
 		const writer = new WritableBuffer();
 		Types.BYTE.write(writer, PacketType.LOGIN_REQUEST);
 		Types.INTEGER.write(writer, ProtocolVersion.v1_2_4_to_1_2_5);
@@ -417,9 +417,5 @@ export default class ClientConnection {
 		Types.BOOLEAN.write(writer, !remove); // false to remove
 		Types.SHORT.write(writer, 0); // TODO: Ping
 		await this.client.write(writer.build());
-	}
-
-	async write(bytes: Uint8Array) {
-		return this.client.write(bytes);
 	}
 }

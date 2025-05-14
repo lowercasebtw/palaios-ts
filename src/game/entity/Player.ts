@@ -7,35 +7,40 @@ import { Entity } from "./Entity.ts";
 import { EntityType } from "./EntityType.ts";
 
 export class Player extends Entity {
-	// TODO: UUID class, because uuid is actually numbers
-	private readonly _uuid: string | null;
-	private readonly _username: string;
-	private readonly _gamemode: Gamemode;
-	private _on_ground: boolean;
+	private readonly connection: ClientConnection;
+	private readonly uuid: string | null;
+	private readonly username: string;
+	private readonly gamemode: Gamemode;
+	private on_ground: boolean;
 
-	private readonly _hunger_bars: number;
-	private readonly _saturation: number;
+	private readonly hunger_bars: number;
+	private readonly saturation: number;
 
-	private readonly _experience_level: number;
-	private readonly _experience_points: number;
+	private readonly experience_level: number;
+	private readonly experience_points: number;
 
-	private _last_location: Location | null;
+	private last_location: Location | null;
 
-	public constructor(username: string, uuid: string | null) {
+	public constructor(
+		connection: ClientConnection,
+		username: string,
+		uuid: string | null,
+	) {
 		super(EntityType.PLAYER);
-		this._uuid = uuid;
-		this._username = username;
-		this._gamemode = Gamemode.CREATIVE;
-		this._on_ground = true;
-		this._hunger_bars = 20;
-		this._saturation = 5;
-		this._experience_level = 0;
-		this._experience_points = 0;
-		this._last_location = null;
+		this.connection = connection;
+		this.uuid = uuid;
+		this.username = username;
+		this.gamemode = Gamemode.CREATIVE;
+		this.on_ground = true;
+		this.hunger_bars = 20;
+		this.saturation = 5;
+		this.experience_level = 0;
+		this.experience_points = 0;
+		this.last_location = null;
 	}
 
 	getUUID() {
-		return this._uuid;
+		return this.uuid;
 	}
 
 	getX() {
@@ -54,50 +59,50 @@ export class Player extends Entity {
 	}
 
 	getUsername() {
-		return this._username;
+		return this.username;
 	}
 
 	getGamemode() {
-		return this._gamemode;
+		return this.gamemode;
 	}
 
 	isOnGround() {
-		return this._on_ground;
+		return this.on_ground;
 	}
 
 	setOnGround(on_ground: boolean) {
-		this._on_ground = on_ground;
+		this.on_ground = on_ground;
 	}
 
 	getHungerLevel() {
-		return this._hunger_bars;
+		return this.hunger_bars;
 	}
 
 	getSaturation() {
-		return this._saturation;
+		return this.saturation;
 	}
 
 	getExperienceLevel() {
-		return this._experience_level;
+		return this.experience_level;
 	}
 
 	getExperiencePoints() {
-		return this._experience_points;
+		return this.experience_points;
 	}
 
 	getLastLocation() {
-		return this._last_location;
+		return this.last_location;
 	}
 
 	setLastLocation(location: Location) {
-		this._last_location = location;
+		this.last_location = location;
 	}
 
 	async spawn(connection: ClientConnection) {
 		const writer = new WritableBuffer();
 		Types.BYTE.write(writer, PacketType.SPAWN_NAMED_ENTITY);
 		Types.INTEGER.write(writer, this.getEntityID());
-		writePacketString(writer, this._username);
+		writePacketString(writer, this.username);
 		const location = this.getLocation();
 		const position = location.getPosition();
 		Types.INTEGER.write(writer, position.x);
@@ -106,14 +111,7 @@ export class Player extends Entity {
 		Types.BYTE.write(writer, this.getYaw());
 		Types.BYTE.write(writer, this.getPitch());
 		Types.SHORT.write(writer, 0); // TODO: inventory
-		await connection.write(writer.build());
-	}
-
-	async remove(connection: ClientConnection) {
-		const writer = new WritableBuffer();
-		Types.BYTE.write(writer, PacketType.DESTROY_ENTITY);
-		Types.INTEGER.write(writer, this.getEntityID());
-		await connection.write(writer.build());
+		await connection.getClient().write(writer.build());
 	}
 
 	async teleport(
@@ -130,6 +128,14 @@ export class Player extends Entity {
 		Types.BYTE.write(writer, toAbsoluteRotation(z));
 		Types.BYTE.write(writer, toAbsoluteRotation(this.getYaw()));
 		Types.BYTE.write(writer, toAbsoluteRotation(this.getPitch()));
-		await connection.write(writer.build());
+		await connection.getClient().write(writer.build());
+	}
+
+	disconnect(message: string) {
+		const writer = new WritableBuffer();
+		Types.BYTE.write(writer, PacketType.KICK_DISCONNECT);
+		writePacketString(writer, message);
+		this.connection.getClient().write(writer.build());
+		this.connection.getClient().close("Disconnected! Reason: " + message);
 	}
 }

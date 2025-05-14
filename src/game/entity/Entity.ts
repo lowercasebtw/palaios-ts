@@ -2,6 +2,9 @@ import { Location, Vec3d } from "../../util/mth.ts";
 import { DimensionType } from "../../util/types.ts";
 import ItemStack from "../item/ItemStack.ts";
 import { EntityType } from "./EntityType.ts";
+import ClientConnection from "../../util/connection.ts";
+import Types, { WritableBuffer } from "../../util/byte.ts";
+import { PacketType } from "../../packet.ts";
 
 // TODO
 export class Entity {
@@ -71,5 +74,12 @@ export class Entity {
 
 	setHealth(health: number) {
 		this._health = Math.max(health, 0);
+	}
+
+	async remove(connection: ClientConnection) {
+		const writer = new WritableBuffer();
+		Types.BYTE.write(writer, PacketType.DESTROY_ENTITY);
+		Types.INTEGER.write(writer, this.getEntityID());
+		await connection.getClient().write(writer.build());
 	}
 }

@@ -54,6 +54,9 @@ export class Server extends EventEmitter {
 				this.emit("error", error);
 			}
 		}
+
+		this.listener.close();
+		this.emit("close", undefined);
 	}
 }
 
@@ -63,7 +66,7 @@ export class Packet {
 }
 
 export class Client extends EventEmitter {
-	private static readonly TOTAL_BYTES_CAPACITY = 1024;
+	private static readonly TOTAL_BYTES_CAPACITY = 1024; // TODO: Might have to make higher idk
 	private closed: boolean;
 
 	constructor(private readonly connection: Deno.TcpConn) {
