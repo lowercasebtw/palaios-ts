@@ -1,15 +1,19 @@
-import { Client, Packet, Server } from "./util/tcp.ts";
+import { Client, Server } from "./util/tcp.ts";
 import World from "./game/dimension/World.ts";
 import { Entity } from "./game/entity/Entity.ts";
 import { EntityType } from "./game/entity/EntityType.ts";
 import { Player } from "./game/entity/Player.ts";
 import { Level, Logger } from "./logger/Logger.ts";
-import { PacketType } from "./packet.ts";
-import Types, { WritableBuffer } from "./util/byte.ts";
+import Types, { ReadableBuffer, WritableBuffer } from "./util/byte.ts";
 import { colorMessage, stripColor } from "./util/color.ts";
 import ClientConnection from "./util/connection.ts";
 import { toAbsolutePosition, toAbsoluteRotation } from "./util/mth.ts";
 import { Difficulty, DimensionType, ServerProperties, WorldType } from "./util/types.ts";
+import PacketType from "./packet/PacketType.ts";
+
+export enum ProtocolVersion {
+	v1_2_4_to_1_2_5 = 29,
+}
 
 export default class MinecraftServer {
 	private server!: Server;
@@ -123,6 +127,12 @@ export default class MinecraftServer {
 		return properties as ServerProperties;
 	}
 
+	getPlayingConnections() {
+		return this.connections.values().filter((connection, _) =>
+			connection.isPlaying()
+		);
+	}
+
 	async listen() {
 		this.server = new Server(this.properties.address, this.properties.port);
 
@@ -136,12 +146,12 @@ export default class MinecraftServer {
 		);
 
 		this.server.on("connect", (client: Client) => {
-			const connection = new ClientConnection(client);
+			const connection = new ClientConnection(this, client);
 			this.connections.set(client, connection);
 			Logger.log(Level.INFO, `Client ${connection.id} connected!`);
 			client.on(
 				"receive",
-				(_, packet: Packet) => connection.handle(this, packet),
+				(_, reader: ReadableBuffer) => connection.handle(reader),
 			);
 			client.on("close", (reason: string) => {
 				Logger.log(Level.INFO, `Client ${connection.id} disconnected!`);
@@ -161,7 +171,7 @@ export default class MinecraftServer {
 		);
 		await this.broadcast(msg);
 		Logger.log(Level.INFO, stripColor(msg));
-		for await (const [_, otherConnection] of this.connections) {
+		for await (const otherConnection of this.getPlayingConnections()) {
 			if (otherConnection.getPlayer() == null) continue; // wtf?
 			// Don't spawn if you
 			if (otherConnection != newConnection) {
@@ -179,8 +189,8 @@ export default class MinecraftServer {
 		);
 		await this.broadcast(msg);
 		Logger.log(Level.INFO, stripColor(msg));
-		for await (const [_, otherConnection] of this.connections) {
-			await otherConnection.sendTabListUpdate(connection, true);
+		for await (const otherConnection of this.getPlayingConnections()) {
+			// await otherConnection.sendTabListUpdate(connection, true);
 			const player = connection.getPlayer();
 			if (player != null) {
 				await player.remove(otherConnection);
@@ -189,7 +199,7 @@ export default class MinecraftServer {
 	}
 
 	async updatePlayerPosition(connection: ClientConnection) {
-		for await (const [_, otherConnection] of this.connections) {
+		for await (const otherConnection of this.getPlayingConnections()) {
 			if (otherConnection != connection) {
 				const player = connection.getPlayer()!;
 				const oldPos = player.getLastPosition();
@@ -244,7 +254,7 @@ export default class MinecraftServer {
 
 	getOnlinePlayerCount() {
 		let online = 0;
-		for (const [_, connection] of this.connections) {
+		for (const connection of this.getPlayingConnections()) {
 			if (connection.getPlayer() != null) {
 				online++;
 			}
@@ -289,62 +299,57 @@ export default class MinecraftServer {
 	}
 
 	async broadcast(message: string) {
-		for (const [_, connection] of this.connections.entries()) {
+		for (const connection of this.getPlayingConnections()) {
 			// player is null, possibly logging in
 			if (connection.getPlayer() != null) {
-				await connection.sendMessage(message);
+				// await connection.sendMessage(message);
 			}
 		}
 
 		// Logger.log(Level.INFO, stripColor(message));
 	}
 
-	async sendKeepAlive(client: Client) {
+	async sendKeepAlive(connection: ClientConnection) {
 		const writer = new WritableBuffer();
 		Types.BYTE.write(writer, PacketType.KEEP_ALIVE);
 		Types.INTEGER.write(writer, Math.floor(Math.random() * 10000));
-		await client.write(writer.build());
+		await connection.getClient().write(writer.build());
 	}
 
-	async sendTimeUpdate(client: Client) {
+	async sendTimeUpdate(connection: ClientConnection) {
 		const writer = new WritableBuffer();
 		Types.BYTE.write(writer, PacketType.UPDATE_TIME);
 		Types.LONG.write(writer, BigInt(this.time));
-		await client.write(writer.build());
+		await connection.getClient().write(writer.build());
 	}
 
 	async tick() {
 		this.time++;
 		if (this.time >= 24000) this.time = 0;
-		for (const [client, connection] of this.connections) {
+		for (const connection of this.getPlayingConnections()) {
 			if (connection.getPlayer() == null) continue; // player is null, possibly logging in
-			await this.sendKeepAlive(client);
-			await this.sendTimeUpdate(client);
-			await connection.sendHealthUpdate();
+			await this.sendKeepAlive(connection);
+			await this.sendTimeUpdate(connection);
+			// await connection.sendHealthUpdate();
 
 			// Send other player movement
-			for await (const [_, otherConnection] of this.connections) {
-				if (otherConnection.getPlayer() == null) continue; // skip
-
-				const player = otherConnection.getPlayer()!;
-
-				{
-					// Add entity for others
-					const writer = new WritableBuffer();
-					Types.BYTE.write(writer, PacketType.ENTITY);
-					Types.INTEGER.write(writer, player.getEntityID());
-					await connection.getClient().write(writer.build());
-				}
-
-				player.teleport(connection);
+			for await (const otherConnection of this.getPlayingConnections()) {
+				const player = otherConnection.getPlayer();
+				if (player == null) continue; // skip
+				// Add entity for others
+				const writer = new WritableBuffer();
+				Types.BYTE.write(writer, PacketType.ENTITY);
+				Types.INTEGER.write(writer, player.getEntityID());
+				await connection.getClient().write(writer.build());
+				await this.updatePlayerPosition(connection);
 			}
 
 			await this.overworld.tick();
 			await this.nether.tick();
 			await this.the_end.tick();
 
-			for await (const [_, otherConnection] of this.connections) {
-				await connection.sendTabListUpdate(otherConnection);
+			for await (const otherConnection of this.getPlayingConnections()) {
+				// await connection.sendTabListUpdate(otherConnection);
 			}
 		}
 	}

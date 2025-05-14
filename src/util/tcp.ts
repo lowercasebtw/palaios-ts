@@ -1,3 +1,5 @@
+import { ReadableBuffer } from "./byte.ts";
+
 type Callback = (...data: any[]) => void;
 
 // TCP Mini-library written by me lowercasebtw
@@ -67,11 +69,6 @@ export class Server extends EventEmitter {
 	}
 }
 
-export class Packet {
-	constructor(public readonly data: Uint8Array) {
-	}
-}
-
 export class Client extends EventEmitter {
 	private static readonly TOTAL_BYTES_CAPACITY = 1024; // TODO: Might have to make higher idk
 	private closed: boolean;
@@ -93,7 +90,7 @@ export class Client extends EventEmitter {
 					this.emit(
 						"receive",
 						length,
-						new Packet(buffer.slice(0, length)),
+						new ReadableBuffer(buffer.slice(0, length)),
 					);
 				}
 			} catch (error) {

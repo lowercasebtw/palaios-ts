@@ -25,7 +25,7 @@ export function toAbsoluteRotation(rotation: number) {
 }
 
 export class Location {
-	private _dimension: DimensionType;
+	private readonly _dimension: DimensionType;
 	private _position: Vec3d;
 
 	constructor(dimension: DimensionType, position: Vec3d) {

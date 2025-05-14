@@ -1,10 +1,11 @@
-import { PacketType, writePacketString } from "../../packet.ts";
+import { PacketType, writePacketString } from "../../serverPacketHandler.ts";
 import Types, { WritableBuffer } from "../../util/byte.ts";
 import ClientConnection from "../../util/connection.ts";
 import { toAbsoluteRotation } from "../../util/mth.ts";
 import { Gamemode } from "../../util/types.ts";
 import { Entity } from "./Entity.ts";
 import { EntityType } from "./EntityType.ts";
+import { Level, Logger } from "../../logger/Logger.ts";
 
 export class Player extends Entity {
 	private readonly connection: ClientConnection;
@@ -90,6 +91,7 @@ export class Player extends Entity {
 		Types.INTEGER.write(writer, this.getEntityID());
 		writePacketString(writer, this.username);
 		const position = this.getPosition();
+		Logger.log(Level.INFO, "position: " + JSON.stringify(position));
 		Types.INTEGER.write(writer, position.x);
 		Types.INTEGER.write(writer, position.y);
 		Types.INTEGER.write(writer, position.z);
@@ -105,15 +107,15 @@ export class Player extends Entity {
 		y: number = this.getY(),
 		z: number = this.getZ(),
 	) {
-		// const writer = new WritableBuffer();
-		// Types.BYTE.write(writer, PacketType.REL_ENTITY_MOVE_LOOK);
-		// Types.INTEGER.write(writer, this.getEntityID());
-		// Types.BYTE.write(writer, toAbsoluteRotation(x));
-		// Types.BYTE.write(writer, toAbsoluteRotation(y));
-		// Types.BYTE.write(writer, toAbsoluteRotation(z));
-		// Types.BYTE.write(writer, toAbsoluteRotation(this.getYaw()));
-		// Types.BYTE.write(writer, toAbsoluteRotation(this.getPitch()));
-		// await connection.getClient().write(writer.build());
+		const writer = new WritableBuffer();
+		Types.BYTE.write(writer, PacketType.REL_ENTITY_MOVE_LOOK);
+		Types.INTEGER.write(writer, this.getEntityID());
+		Types.BYTE.write(writer, toAbsoluteRotation(x));
+		Types.BYTE.write(writer, toAbsoluteRotation(y));
+		Types.BYTE.write(writer, toAbsoluteRotation(z));
+		Types.BYTE.write(writer, toAbsoluteRotation(this.getYaw()));
+		Types.BYTE.write(writer, toAbsoluteRotation(this.getPitch()));
+		await connection.getClient().write(writer.build());
 	}
 
 	disconnect(message: string) {
