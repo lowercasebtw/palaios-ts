@@ -10,6 +10,11 @@ import ClientConnection from "./util/connection.ts";
 import { toAbsolutePosition, toAbsoluteRotation } from "./util/mth.ts";
 import { Difficulty, DimensionType, ServerProperties, WorldType } from "./util/types.ts";
 import PacketType from "./packet/PacketType.ts";
+import RelEntityMoveLookPacket from "./packet/RelEntityMoveLookPacket.ts";
+import KeepAlivePacket from "./packet/KeepAlivePacket.ts";
+import UpdateTimePacket from "./packet/UpdateTimePacket.ts";
+import ChatMessagePacket from "./packet/ChatMessagePacket.ts";
+import PlayerListItemPacket, { UpdateType } from "./packet/PlayerListItemPacket.ts";
 
 export enum ProtocolVersion {
 	v1_2_4_to_1_2_5 = 29,
@@ -205,27 +210,23 @@ export default class MinecraftServer {
 				const oldPos = player.getLastPosition();
 				const newPos = player.getPosition();
 				if (!oldPos.equals(newPos)) {
-					const writer = new WritableBuffer();
-					Types.BYTE.write(writer, PacketType.REL_ENTITY_MOVE_LOOK);
-					Types.INTEGER.write(writer, player.getEntityID());
-
-					const nx = newPos.x - oldPos.x;
-					const ny = newPos.y - oldPos.y;
-					const nz = newPos.z - oldPos.z;
+					const entityId = player.getEntityID();
+					const nx = toAbsolutePosition(newPos.x - oldPos.x);
+					const ny = toAbsolutePosition(newPos.y - oldPos.y);
+					const nz = toAbsolutePosition(newPos.z - oldPos.z);
+					const yaw = toAbsoluteRotation(player.getYaw());
+					const pitch = toAbsoluteRotation(player.getPitch());
 					player.setPosition(player.getPosition());
-
-					Types.BYTE.write(writer, toAbsolutePosition(nx));
-					Types.BYTE.write(writer, toAbsolutePosition(ny));
-					Types.BYTE.write(writer, toAbsolutePosition(nz));
-					Types.BYTE.write(
-						writer,
-						toAbsoluteRotation(player.getYaw()),
+					await connection.sendPacket(
+						new RelEntityMoveLookPacket(
+							entityId,
+							nx,
+							ny,
+							nz,
+							yaw,
+							pitch,
+						),
 					);
-					Types.BYTE.write(
-						writer,
-						toAbsoluteRotation(player.getPitch()),
-					);
-					await otherConnection.getClient().write(writer.build());
 				}
 			}
 		}
@@ -302,25 +303,11 @@ export default class MinecraftServer {
 		for (const connection of this.getPlayingConnections()) {
 			// player is null, possibly logging in
 			if (connection.getPlayer() != null) {
-				// await connection.sendMessage(message);
+				await connection.sendPacket(new ChatMessagePacket(message));
 			}
 		}
 
 		// Logger.log(Level.INFO, stripColor(message));
-	}
-
-	async sendKeepAlive(connection: ClientConnection) {
-		const writer = new WritableBuffer();
-		Types.BYTE.write(writer, PacketType.KEEP_ALIVE);
-		Types.INTEGER.write(writer, Math.floor(Math.random() * 10000));
-		await connection.getClient().write(writer.build());
-	}
-
-	async sendTimeUpdate(connection: ClientConnection) {
-		const writer = new WritableBuffer();
-		Types.BYTE.write(writer, PacketType.UPDATE_TIME);
-		Types.LONG.write(writer, BigInt(this.time));
-		await connection.getClient().write(writer.build());
 	}
 
 	async tick() {
@@ -328,19 +315,25 @@ export default class MinecraftServer {
 		if (this.time >= 24000) this.time = 0;
 		for (const connection of this.getPlayingConnections()) {
 			if (connection.getPlayer() == null) continue; // player is null, possibly logging in
-			await this.sendKeepAlive(connection);
-			await this.sendTimeUpdate(connection);
+			await connection.sendPacket(
+				new KeepAlivePacket(Math.floor(Math.random() * 10000)),
+			);
+			await connection.sendPacket(
+				new UpdateTimePacket(BigInt(this.time)),
+			);
 			// await connection.sendHealthUpdate();
 
 			// Send other player movement
 			for await (const otherConnection of this.getPlayingConnections()) {
 				const player = otherConnection.getPlayer();
 				if (player == null) continue; // skip
+
 				// Add entity for others
 				const writer = new WritableBuffer();
 				Types.BYTE.write(writer, PacketType.ENTITY);
 				Types.INTEGER.write(writer, player.getEntityID());
 				await connection.getClient().write(writer.build());
+
 				await this.updatePlayerPosition(connection);
 			}
 
@@ -349,7 +342,15 @@ export default class MinecraftServer {
 			await this.the_end.tick();
 
 			for await (const otherConnection of this.getPlayingConnections()) {
-				// await connection.sendTabListUpdate(otherConnection);
+				const otherPlayer = otherConnection.getPlayer();
+				if (!(connection.getPlayer() == null || otherPlayer == null)) {
+					await connection.sendPacket(
+						new PlayerListItemPacket(
+							otherPlayer.getUsername(),
+							UpdateType.ADD,
+						),
+					);
+				}
 			}
 		}
 	}

@@ -4,7 +4,7 @@ import ItemStack from "../item/ItemStack.ts";
 import { EntityType } from "./EntityType.ts";
 import ClientConnection from "../../util/connection.ts";
 import Types, { WritableBuffer } from "../../util/byte.ts";
-import { PacketType } from "../../serverPacketHandler.ts";
+import PacketType from "../../packet/PacketType.ts";
 
 // TODO
 export class Entity {

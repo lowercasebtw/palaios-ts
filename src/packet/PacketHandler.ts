@@ -13,6 +13,8 @@ import PluginMessagePacket from "./PluginMessagePacket.ts";
 import PlayerAbilitiesPacket from "./PlayerAbilitiesPacket.ts";
 import SetWindowItemsPacket from "./SetWindowItemsPacket.ts";
 import UpdateTimePacket from "./UpdateTimePacket.ts";
+import PlayerListItemPacket from "./PlayerListItemPacket.ts";
+import RelEntityMoveLookPacket from "./RelEntityMoveLookPacket.ts";
 
 export default abstract class PacketHandler {
 	abstract onKeepAlive(packet: KeepAlivePacket): Promise<void>;
@@ -25,7 +27,9 @@ export default abstract class PacketHandler {
 	abstract onPlayerLook(packet: PlayerLookPacket): Promise<void>;
 	abstract onPlayerPositionLook(packet: PlayerPositionLookPacket): Promise<void>;
 	abstract onAnimation(packet: AnimationPacket): Promise<void>;
+	abstract onRelEntityMoveLook(packet: RelEntityMoveLookPacket): Promise<void>;
 	abstract onSetWindowItems(packet: SetWindowItemsPacket): Promise<void>;
+	abstract onPlayerListItem(packet: PlayerListItemPacket): Promise<void>;
 	abstract onPlayerAbilities(packet: PlayerAbilitiesPacket): Promise<void>;
 	abstract onPluginMessage(packet: PluginMessagePacket): Promise<void>;
 	abstract onServerListPing(packet: ServerListPingPacket): Promise<void>;

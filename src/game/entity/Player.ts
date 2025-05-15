@@ -1,17 +1,13 @@
-import { PacketType, writePacketString } from "../../serverPacketHandler.ts";
-import Types, { WritableBuffer } from "../../util/byte.ts";
 import ClientConnection from "../../util/connection.ts";
-import { toAbsoluteRotation } from "../../util/mth.ts";
 import { Gamemode } from "../../util/types.ts";
 import { Entity } from "./Entity.ts";
 import { EntityType } from "./EntityType.ts";
-import { Level, Logger } from "../../logger/Logger.ts";
 
 export class Player extends Entity {
 	private readonly connection: ClientConnection;
 	private readonly uuid: string | null;
 	private readonly username: string;
-	private readonly gamemode: Gamemode;
+	private readonly gameMode: Gamemode;
 	private on_ground: boolean;
 
 	private readonly hunger_bars: number;
@@ -29,7 +25,7 @@ export class Player extends Entity {
 		this.connection = connection;
 		this.uuid = uuid;
 		this.username = username;
-		this.gamemode = Gamemode.CREATIVE;
+		this.gameMode = Gamemode.CREATIVE;
 		this.on_ground = true;
 		this.hunger_bars = 20;
 		this.saturation = 5;
@@ -58,7 +54,7 @@ export class Player extends Entity {
 	}
 
 	getGamemode() {
-		return this.gamemode;
+		return this.gameMode;
 	}
 
 	isOnGround() {
@@ -86,19 +82,19 @@ export class Player extends Entity {
 	}
 
 	async spawn(connection: ClientConnection) {
-		const writer = new WritableBuffer();
-		Types.BYTE.write(writer, PacketType.SPAWN_NAMED_ENTITY);
-		Types.INTEGER.write(writer, this.getEntityID());
-		writePacketString(writer, this.username);
-		const position = this.getPosition();
-		Logger.log(Level.INFO, "position: " + JSON.stringify(position));
-		Types.INTEGER.write(writer, position.x);
-		Types.INTEGER.write(writer, position.y);
-		Types.INTEGER.write(writer, position.z);
-		Types.BYTE.write(writer, this.getYaw());
-		Types.BYTE.write(writer, this.getPitch());
-		Types.SHORT.write(writer, 0); // TODO: inventory
-		await connection.getClient().write(writer.build());
+		// const writer = new WritableBuffer();
+		// Types.BYTE.write(writer, PacketType.SPAWN_NAMED_ENTITY);
+		// Types.INTEGER.write(writer, this.getEntityID());
+		// writePacketString(writer, this.username);
+		// const position = this.getPosition();
+		// Logger.log(Level.INFO, "position: " + JSON.stringify(position));
+		// Types.INTEGER.write(writer, position.x);
+		// Types.INTEGER.write(writer, position.y);
+		// Types.INTEGER.write(writer, position.z);
+		// Types.BYTE.write(writer, this.getYaw());
+		// Types.BYTE.write(writer, this.getPitch());
+		// Types.SHORT.write(writer, 0); // TODO: inventory
+		// await connection.getClient().write(writer.build());
 	}
 
 	async teleport(
@@ -107,22 +103,18 @@ export class Player extends Entity {
 		y: number = this.getY(),
 		z: number = this.getZ(),
 	) {
-		const writer = new WritableBuffer();
-		Types.BYTE.write(writer, PacketType.REL_ENTITY_MOVE_LOOK);
-		Types.INTEGER.write(writer, this.getEntityID());
-		Types.BYTE.write(writer, toAbsoluteRotation(x));
-		Types.BYTE.write(writer, toAbsoluteRotation(y));
-		Types.BYTE.write(writer, toAbsoluteRotation(z));
-		Types.BYTE.write(writer, toAbsoluteRotation(this.getYaw()));
-		Types.BYTE.write(writer, toAbsoluteRotation(this.getPitch()));
-		await connection.getClient().write(writer.build());
+		// const writer = new WritableBuffer();
+		// Types.BYTE.write(writer, PacketType.REL_ENTITY_MOVE_LOOK);
+		// Types.INTEGER.write(writer, this.getEntityID());
+		// Types.BYTE.write(writer, toAbsoluteRotation(x));
+		// Types.BYTE.write(writer, toAbsoluteRotation(y));
+		// Types.BYTE.write(writer, toAbsoluteRotation(z));
+		// Types.BYTE.write(writer, toAbsoluteRotation(this.getYaw()));
+		// Types.BYTE.write(writer, toAbsoluteRotation(this.getPitch()));
+		// await connection.getClient().write(writer.build());
 	}
 
-	disconnect(message: string) {
-		const writer = new WritableBuffer();
-		Types.BYTE.write(writer, PacketType.KICK_DISCONNECT);
-		writePacketString(writer, message);
-		this.connection.getClient().write(writer.build());
-		this.connection.getClient().close("Disconnected! Reason: " + message);
+	async disconnect(message: string) {
+		await this.connection.kick(message);
 	}
 }
