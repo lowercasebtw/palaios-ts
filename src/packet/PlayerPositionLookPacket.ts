@@ -6,10 +6,8 @@ import { Vec3d } from "../util/mth.ts";
 
 export default class PlayerPositionLookPacket extends PlayerLookPacket {
 	constructor(
-		private x: double,
-		private y: double,
+		private position: Vec3d,
 		private stance: double,
-		private z: double,
 		yaw: float,
 		pitch: float,
 		onGround: boolean,
@@ -18,18 +16,19 @@ export default class PlayerPositionLookPacket extends PlayerLookPacket {
 	}
 
 	override write(writer: WritableBuffer) {
-		Types.DOUBLE.write(writer, this.x);
-		Types.DOUBLE.write(writer, this.y);
+		Types.DOUBLE.write(writer, this.position.x);
+		Types.DOUBLE.write(writer, this.position.y);
 		Types.DOUBLE.write(writer, this.stance);
-		Types.DOUBLE.write(writer, this.z);
+		Types.DOUBLE.write(writer, this.position.z);
 		super.write(writer);
 	}
 
 	override read(reader: ReadableBuffer) {
-		this.x = Types.DOUBLE.read(reader);
-		this.y = Types.DOUBLE.read(reader);
+		const x = Types.DOUBLE.read(reader);
+		const y = Types.DOUBLE.read(reader);
 		this.stance = Types.DOUBLE.read(reader);
-		this.z = Types.DOUBLE.read(reader);
+		const z = Types.DOUBLE.read(reader);
+		this.position = new Vec3d(x, y, z);
 		super.read(reader);
 	}
 
@@ -42,7 +41,7 @@ export default class PlayerPositionLookPacket extends PlayerLookPacket {
 	}
 
 	getPosition() {
-		return new Vec3d(this.x, this.y, this.z);
+		return this.position;
 	}
 
 	getStance() {

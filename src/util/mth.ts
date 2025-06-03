@@ -11,6 +11,10 @@ export class Vec3d {
 		public readonly z: number,
 	) {}
 
+	mul(value: number) {
+		return new Vec3d(this.x * value, this.y * value, this.z * value);
+	}
+
 	equals(other: Vec3d) {
 		return this.x === other.x && this.y === other.y && this.z === other.z;
 	}
@@ -18,6 +22,10 @@ export class Vec3d {
 
 export function toAbsolutePosition(coord: number) {
 	return coord * 32.0;
+}
+
+export function toAbsolutePositionVec(coords: Vec3d) {
+	return coords.mul(32.0);
 }
 
 export function toAbsoluteRotation(rotation: number) {

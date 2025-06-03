@@ -3,7 +3,6 @@ import Types, { ReadableBuffer, WritableBuffer } from "../util/byte.ts";
 import { Client } from "./tcp.ts";
 import AbstractPacket from "../packet/AbstractPacket.ts";
 import ServerPacketHandler from "../serverPacketHandler.ts";
-import Packets from "../packet/Packets.ts";
 import PacketType from "../packet/PacketType.ts";
 import { Level, Logger } from "../logger/Logger.ts";
 import KickDisconnectPacket from "../packet/KickDisconnectPacket.ts";
@@ -34,7 +33,10 @@ export default class ClientConnection {
 
 	async handle(reader: ReadableBuffer) {
 		const packet_id = Types.BYTE.read(reader);
-		if (!(packet_id in PacketType)) {
+		const packetType = PacketType.entries().find((entry) =>
+			entry.getId() == packet_id
+		);
+		if (packetType === undefined) {
 			Logger.log(
 				Level.WARNING,
 				"Recieved unknown packet type with id " + packet_id,
@@ -42,12 +44,11 @@ export default class ClientConnection {
 			return;
 		}
 
-		const packetClass: AbstractPacket | undefined = Packets.INSTANCE
-			.getPacket(packet_id)!;
-		if (packetClass === undefined) {
+		const packetClass = packetType.getPacketClass();
+		if (packetClass == null) {
 			Logger.log(
 				Level.WARNING,
-				"TODO Packet: " + PacketType[packet_id],
+				"TODO Packet: " + packetType,
 			);
 			return;
 		}
@@ -64,7 +65,7 @@ export default class ClientConnection {
 
 	async sendPacket(packet: AbstractPacket) {
 		const writer = new WritableBuffer();
-		Types.BYTE.write(writer, packet.getType());
+		Types.BYTE.write(writer, packet.getType().getId());
 		packet.write(writer);
 		await this.client.write(writer.build());
 	}

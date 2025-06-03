@@ -2,6 +2,9 @@ import ClientConnection from "../../util/connection.ts";
 import { Gamemode } from "../../util/types.ts";
 import { Entity } from "./Entity.ts";
 import { EntityType } from "./EntityType.ts";
+import { toAbsolutePositionVec, toAbsoluteRotation, Vec3d } from "../../util/mth.ts";
+import EntityTeleportPacket from "../../packet/EntityTeleportPacket.ts";
+import SpawnNamedEntityPacket from "../../packet/SpawnNamedEntityPacket.ts";
 
 export class Player extends Entity {
 	private readonly connection: ClientConnection;
@@ -82,19 +85,16 @@ export class Player extends Entity {
 	}
 
 	async spawn(connection: ClientConnection) {
-		// const writer = new WritableBuffer();
-		// Types.BYTE.write(writer, PacketType.SPAWN_NAMED_ENTITY);
-		// Types.INTEGER.write(writer, this.getEntityID());
-		// writePacketString(writer, this.username);
-		// const position = this.getPosition();
-		// Logger.log(Level.INFO, "position: " + JSON.stringify(position));
-		// Types.INTEGER.write(writer, position.x);
-		// Types.INTEGER.write(writer, position.y);
-		// Types.INTEGER.write(writer, position.z);
-		// Types.BYTE.write(writer, this.getYaw());
-		// Types.BYTE.write(writer, this.getPitch());
-		// Types.SHORT.write(writer, 0); // TODO: inventory
-		// await connection.getClient().write(writer.build());
+		await connection.sendPacket(
+			new SpawnNamedEntityPacket(
+				this.getEntityID(),
+				this.username,
+				this.getPosition(),
+				this.getYaw(),
+				this.getPitch(),
+				0, // TODO: inventory
+			),
+		);
 	}
 
 	async teleport(
@@ -103,15 +103,14 @@ export class Player extends Entity {
 		y: number = this.getY(),
 		z: number = this.getZ(),
 	) {
-		// const writer = new WritableBuffer();
-		// Types.BYTE.write(writer, PacketType.REL_ENTITY_MOVE_LOOK);
-		// Types.INTEGER.write(writer, this.getEntityID());
-		// Types.BYTE.write(writer, toAbsoluteRotation(x));
-		// Types.BYTE.write(writer, toAbsoluteRotation(y));
-		// Types.BYTE.write(writer, toAbsoluteRotation(z));
-		// Types.BYTE.write(writer, toAbsoluteRotation(this.getYaw()));
-		// Types.BYTE.write(writer, toAbsoluteRotation(this.getPitch()));
-		// await connection.getClient().write(writer.build());
+		await connection.sendPacket(
+			new EntityTeleportPacket(
+				this.getEntityID(),
+				toAbsolutePositionVec(new Vec3d(x, y, z)),
+				toAbsoluteRotation(this.getYaw()),
+				toAbsoluteRotation(this.getPitch()),
+			),
+		);
 	}
 
 	async disconnect(message: string) {
