@@ -72,4 +72,20 @@ export const Logger = new (class Logger {
 		if (level === Level.FATAL)
 			throw new Error("The server encountered a fatal error, causing it to crash. Please restart.");
 	}
+
+	info(message: any, ...args: any[]) {
+		this.log(Level.INFO, message, ...args);
+	}
+
+	warn(message: any, ...args: any[]) {
+		this.log(Level.WARNING, message, ...args);
+	}
+
+	severe(message: any, ...args: any[]) {
+		this.log(Level.SEVERE, message, ...args);
+	}
+
+	fatal(message: any, ...args: any[]) {
+		this.log(Level.FATAL, message, ...args);
+	}
 })();

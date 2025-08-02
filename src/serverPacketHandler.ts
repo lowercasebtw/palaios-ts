@@ -1,31 +1,31 @@
-import PacketHandler from "./packet/PacketHandler.ts";
-import ClientConnection from "./util/connection.ts";
-import KeepAlivePacket from "./packet/KeepAlivePacket.ts";
-import ServerListPingPacket from "./packet/ServerListPingPacket.ts";
-import KickDisconnectPacket from "./packet/KickDisconnectPacket.ts";
-import { Level, Logger } from "./logger/Logger.ts";
-import MinecraftServer, { ProtocolVersion } from "./server.ts";
-import LoginRequestPacket from "./packet/LoginRequestPacket.ts";
-import ChatMessagePacket from "./packet/ChatMessagePacket.ts";
-import PlayerPositionPacket from "./packet/PlayerPositionPacket.ts";
-import PlayerPacket from "./packet/PlayerPacket.ts";
-import PlayerLookPacket from "./packet/PlayerLookPacket.ts";
-import PlayerPositionLookPacket from "./packet/PlayerPositionLookPacket.ts";
+import pako from "https://deno.land/x/pako@v2.0.3/pako.js";
+import { Player } from "./game/entity/Player.ts";
+import { Logger } from "./logger/Logger.ts";
 import AnimationPacket from "./packet/AnimationPacket.ts";
-import PlayerAbilitiesPacket from "./packet/PlayerAbilitiesPacket.ts";
-import PluginMessagePacket from "./packet/PluginMessagePacket.ts";
+import ChatMessagePacket from "./packet/ChatMessagePacket.ts";
 import HandshakePacket from "./packet/HandshakePacket.ts";
+import KeepAlivePacket from "./packet/KeepAlivePacket.ts";
+import KickDisconnectPacket from "./packet/KickDisconnectPacket.ts";
+import LoginRequestPacket from "./packet/LoginRequestPacket.ts";
+import PacketHandler from "./packet/PacketHandler.ts";
+import PacketType from "./packet/PacketType.ts";
+import PlayerAbilitiesPacket from "./packet/PlayerAbilitiesPacket.ts";
+import PlayerListItemPacket from "./packet/PlayerListItemPacket.ts";
+import PlayerLookPacket from "./packet/PlayerLookPacket.ts";
+import PlayerPacket from "./packet/PlayerPacket.ts";
+import PlayerPositionLookPacket from "./packet/PlayerPositionLookPacket.ts";
+import PlayerPositionPacket from "./packet/PlayerPositionPacket.ts";
+import PluginMessagePacket from "./packet/PluginMessagePacket.ts";
+import RelEntityMoveLookPacket from "./packet/RelEntityMoveLookPacket.ts";
+import ServerListPingPacket from "./packet/ServerListPingPacket.ts";
 import SetWindowItemsPacket from "./packet/SetWindowItemsPacket.ts";
 import UpdateTimePacket from "./packet/UpdateTimePacket.ts";
-import { Player } from "./game/entity/Player.ts";
-import PlayerListItemPacket from "./packet/PlayerListItemPacket.ts";
-import RelEntityMoveLookPacket from "./packet/RelEntityMoveLookPacket.ts";
-import { generateHash } from "./util/hash.ts";
-import { fetchUUID } from "./util/util.ts";
+import MinecraftServer, { ProtocolVersion } from "./server.ts";
 import Types, { WritableBuffer } from "./util/byte.ts";
-import PacketType from "./packet/PacketType.ts";
-import pako from "https://deno.land/x/pako@v2.0.3/pako.js";
+import ClientConnection from "./util/connection.ts";
+import { generateHash } from "./util/hash.ts";
 import { DimensionType, WorldType } from "./util/types.ts";
+import { fetchUUID } from "./util/util.ts";
 
 export default class ServerPacketHandler extends PacketHandler {
 	private playing: boolean;
@@ -49,14 +49,13 @@ export default class ServerPacketHandler extends PacketHandler {
 	}
 
 	override async onKeepAlive(packet: KeepAlivePacket) {
-		// Logger.log(Level.INFO, "keep alive");
 		await this.connection.sendPacket(new KeepAlivePacket(packet.getId()));
 	}
 
 	override async onLoginRequest(packet: LoginRequestPacket) {
 		if (
 			this.server.getOnlinePlayerCount() >=
-				this.server.getMaxPlayerCount()
+			this.server.getMaxPlayerCount()
 		) {
 			await this.connection.kick("The server is full!");
 			return;
@@ -73,9 +72,7 @@ export default class ServerPacketHandler extends PacketHandler {
 
 		const uuid = await fetchUUID(username);
 		if (uuid === null && this.server.isOnlineMode()) {
-			console.log(
-				`id=${this.connection.id} username='${username}', uuid='${uuid}'`,
-			);
+			Logger.info(`id=${this.connection.id} username='${username}', uuid='${uuid}'`);
 			await this.connection.kick(`Failed to login, invalid uuid.`);
 			return;
 		}
@@ -302,13 +299,13 @@ export default class ServerPacketHandler extends PacketHandler {
 		await this.server.updatePlayerPosition(this.connection);
 	}
 
-	override async onAnimation(packet: AnimationPacket) {}
+	override async onAnimation(packet: AnimationPacket) { }
 
-	override async onRelEntityMoveLook(packet: RelEntityMoveLookPacket) {}
+	override async onRelEntityMoveLook(packet: RelEntityMoveLookPacket) { }
 
-	override async onSetWindowItems(packet: SetWindowItemsPacket) {}
+	override async onSetWindowItems(packet: SetWindowItemsPacket) { }
 
-	override async onPlayerListItem(packet: PlayerListItemPacket) {}
+	override async onPlayerListItem(packet: PlayerListItemPacket) { }
 
 	override async onPlayerAbilities(packet: PlayerAbilitiesPacket) {
 		if (this.player != null) {
@@ -318,14 +315,11 @@ export default class ServerPacketHandler extends PacketHandler {
 
 	override async onPluginMessage(packet: PluginMessagePacket) {
 		// // Plugin Message
-		// Logger.log(
-		// 	Level.INFO,
-		// 	`Got Plugin Message ('${packet.getChannel()}') [ ...${packet.getMessage().length} bytes ]`,
-		// );
+		// Logger.info(`Got Plugin Message ('${packet.getChannel()}') [ ...${packet.getMessage().length} bytes ]`);
 	}
 
 	override async onServerListPing(packet: ServerListPingPacket) {
-		Logger.log(Level.INFO, "Got server list ping!");
+		Logger.info("Got server list ping!");
 		await this.connection.sendPacket(
 			new KickDisconnectPacket(
 				`${this.server.getMessageOfTheDay()}§${this.server.getOnlinePlayerCount()}§${this.server.getMaxPlayerCount()}`,
@@ -334,8 +328,8 @@ export default class ServerPacketHandler extends PacketHandler {
 	}
 
 	override async onKickDisconnect(packet: KickDisconnectPacket) {
-		Logger.log(Level.INFO, "Got kick disconnect!");
-		Logger.log(Level.INFO, "   Reason: " + packet.getReason());
+		Logger.info("Got kick disconnect!");
+		Logger.info("   Reason: " + packet.getReason());
 		await this.server.onPlayerLeave(this.connection);
 	}
 }

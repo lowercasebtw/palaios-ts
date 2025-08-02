@@ -1,20 +1,20 @@
-import { Client, Server } from "./util/tcp.ts";
 import World from "./game/dimension/World.ts";
 import { Entity } from "./game/entity/Entity.ts";
 import { EntityType } from "./game/entity/EntityType.ts";
 import { Player } from "./game/entity/Player.ts";
 import { Level, Logger } from "./logger/Logger.ts";
+import ChatMessagePacket from "./packet/ChatMessagePacket.ts";
+import KeepAlivePacket from "./packet/KeepAlivePacket.ts";
+import PacketType from "./packet/PacketType.ts";
+import PlayerListItemPacket, { UpdateType } from "./packet/PlayerListItemPacket.ts";
+import RelEntityMoveLookPacket from "./packet/RelEntityMoveLookPacket.ts";
+import UpdateTimePacket from "./packet/UpdateTimePacket.ts";
 import Types, { ReadableBuffer, WritableBuffer } from "./util/byte.ts";
 import { colorMessage, stripColor } from "./util/color.ts";
 import ClientConnection from "./util/connection.ts";
-import { toAbsolutePosition, toAbsoluteRotation } from "./util/mth.ts";
+import { toAbsolutePosition, toAbsoluteRotation, Vec3d } from "./util/mth.ts";
+import { Client, Server } from "./util/tcp.ts";
 import { Difficulty, DimensionType, ServerProperties, WorldType } from "./util/types.ts";
-import PacketType from "./packet/PacketType.ts";
-import RelEntityMoveLookPacket from "./packet/RelEntityMoveLookPacket.ts";
-import KeepAlivePacket from "./packet/KeepAlivePacket.ts";
-import UpdateTimePacket from "./packet/UpdateTimePacket.ts";
-import ChatMessagePacket from "./packet/ChatMessagePacket.ts";
-import PlayerListItemPacket, { UpdateType } from "./packet/PlayerListItemPacket.ts";
 
 export enum ProtocolVersion {
 	v1_2_4_to_1_2_5 = 29,
@@ -75,7 +75,7 @@ export default class MinecraftServer {
 				Logger.log(
 					Level.WARNING,
 					"An error has occured when ticking! " +
-						(error as Error).message,
+					(error as Error).message,
 				);
 			}
 		}, 1000 / this.ticks_per_second);
@@ -220,9 +220,7 @@ export default class MinecraftServer {
 					await connection.sendPacket(
 						new RelEntityMoveLookPacket(
 							entityId,
-							nx,
-							ny,
-							nz,
+							new Vec3d(nx, ny, nz),
 							yaw,
 							pitch,
 						),
